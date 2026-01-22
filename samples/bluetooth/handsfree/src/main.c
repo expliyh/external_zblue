@@ -19,19 +19,19 @@
 #include <zephyr/bluetooth/classic/hfp_hf.h>
 #include <zephyr/settings/settings.h>
 
-static void hf_connected(struct bt_conn *conn, struct bt_hfp_hf *hf)
+static void hf_connected(struct bt_conn *conn, struct bt_hfp_hf *hf, uint8_t err)
 {
-	printk("HFP HF Connected!\n");
+	printk("HFP HF Connected (err %u)!\n", err);
 }
 
-static void hf_disconnected(struct bt_hfp_hf *hf)
+static void hf_disconnected(struct bt_hfp_hf *hf, uint8_t reason)
 {
-	printk("HFP HF Disconnected!\n");
+	printk("HFP HF Disconnected (reason %u)!\n", reason);
 }
 
-static void hf_sco_connected(struct bt_hfp_hf *hf, struct bt_conn *sco_conn)
+static void hf_sco_connected(struct bt_hfp_hf *hf, struct bt_conn *sco_conn, uint8_t err)
 {
-	printk("HF SCO connected\n");
+	printk("HF SCO connected (err %u)\n", err);
 }
 
 static void hf_sco_disconnected(struct bt_conn *sco_conn, uint8_t reason)

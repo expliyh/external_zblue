@@ -1041,8 +1041,8 @@ static void bt_avrcp_tg_vendor_tx_work(struct k_work *work)
 	return;
 
 done:
-	avrcp_tg_tx_remove(tg, buf);
 	if (buf != NULL) {
+		avrcp_tg_tx_remove(tg, buf);
 		net_buf_unref(buf);
 	}
 	/* restart the tx work */

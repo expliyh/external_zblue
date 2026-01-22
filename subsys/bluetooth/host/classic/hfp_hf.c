@@ -13,6 +13,7 @@
 #include <zephyr/sys/printk.h>
 
 #include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/hci.h>
 
 #include "common/assert.h"
 
@@ -109,6 +110,41 @@ static void hf_flush_pending_cmds(struct bt_hfp_hf *hf)
 
 	while ((buf = k_fifo_get(&hf->tx_pending, K_NO_WAIT)) != NULL) {
 		net_buf_unref(buf);
+	}
+}
+
+static void hfp_hf_set_disconnect_reason(struct bt_hfp_hf *hf, uint8_t reason)
+{
+	if (!hf) {
+		return;
+	}
+
+	if (hf->disconnect_reason == BT_HCI_ERR_SUCCESS) {
+		hf->disconnect_reason = reason;
+	}
+}
+
+static uint8_t hfp_hf_get_disconnect_reason(struct bt_hfp_hf *hf)
+{
+	if (!hf) {
+		return BT_HCI_ERR_UNSPECIFIED;
+	}
+
+	if (hf->disconnect_reason != BT_HCI_ERR_SUCCESS) {
+		return hf->disconnect_reason;
+	}
+
+	if (hf->acl && hf->acl->err) {
+		return hf->acl->err;
+	}
+
+	return BT_HCI_ERR_UNSPECIFIED;
+}
+
+static void hfp_hf_clear_disconnect_reason(struct bt_hfp_hf *hf)
+{
+	if (hf) {
+		hf->disconnect_reason = BT_HCI_ERR_SUCCESS;
 	}
 }
 
@@ -223,6 +259,7 @@ void hf_slc_error(struct at_client *hf_at)
 	int err;
 
 	LOG_ERR("SLC error: disconnecting");
+	hfp_hf_set_disconnect_reason(hf, BT_HCI_ERR_UNSPECIFIED);
 	err = bt_rfcomm_dlc_disconnect(&hf->rfcomm_dlc);
 	if (err) {
 		LOG_ERR("Rfcomm: Unable to disconnect :%d", -err);
@@ -235,6 +272,7 @@ static void hfp_hf_send_failed(struct bt_hfp_hf *hf)
 
 	LOG_ERR("SLC error: disconnecting");
 
+	hfp_hf_set_disconnect_reason(hf, BT_HCI_ERR_UNSPECIFIED);
 	err = bt_rfcomm_dlc_disconnect(&hf->rfcomm_dlc);
 	if (err) {
 		LOG_ERR("Fail to disconnect: %d", err);
@@ -2272,8 +2310,8 @@ static void slc_completed(struct at_client *hf_at)
 	struct bt_hfp_hf *hf = CONTAINER_OF(hf_at, struct bt_hfp_hf, at);
 	struct bt_conn *conn = hf->acl;
 
-	if (bt_hf->connected) {
-		bt_hf->connected(conn, hf);
+	if (bt_hf && bt_hf->connected) {
+		bt_hf->connected(conn, hf, BT_HCI_ERR_SUCCESS);
 	}
 
 	atomic_set_bit(hf->flags, BT_HFP_HF_FLAG_CONNECTED);
@@ -4270,10 +4308,11 @@ static void hfp_hf_connected(struct bt_rfcomm_dlc *dlc)
 static void hfp_hf_disconnected(struct bt_rfcomm_dlc *dlc)
 {
 	struct bt_hfp_hf *hf = CONTAINER_OF(dlc, struct bt_hfp_hf, rfcomm_dlc);
+	uint8_t reason = hfp_hf_get_disconnect_reason(hf);
 
 	LOG_DBG("hf disconnected!");
-	if (bt_hf->disconnected) {
-		bt_hf->disconnected(hf);
+	if (bt_hf && bt_hf->disconnected) {
+		bt_hf->disconnected(hf, reason);
 	}
 
 	k_work_cancel(&hf->work);
@@ -4281,6 +4320,7 @@ static void hfp_hf_disconnected(struct bt_rfcomm_dlc *dlc)
 	hf->current_cmd = BT_HFP_HF_AT_CMD_UNKNOWN;
 	hf_flush_pending_cmds(hf);
 	hf->acl = NULL;
+	hfp_hf_clear_disconnect_reason(hf);
 }
 
 static void hfp_hf_recv(struct bt_rfcomm_dlc *dlc, struct net_buf *buf)
@@ -4379,7 +4419,8 @@ static void hfp_hf_sco_connected(struct bt_sco_chan *chan)
 	struct bt_hfp_hf *hf = CONTAINER_OF(chan, struct bt_hfp_hf, chan);
 
 	if ((bt_hf != NULL) && (bt_hf->sco_connected)) {
-		bt_hf->sco_connected(hf, chan->sco);
+		bt_hf->sco_connected(hf, chan->sco, chan->sco ? chan->sco->err
+							     : BT_HCI_ERR_UNSPECIFIED);
 	}
 }
 
@@ -4498,6 +4539,7 @@ int Z_API(bt_hfp_hf_disconnect)(struct bt_hfp_hf *hf)
 		return -EINVAL;
 	}
 
+	hfp_hf_set_disconnect_reason(hf, BT_HCI_ERR_LOCALHOST_TERM_CONN);
 	return bt_rfcomm_dlc_disconnect(&hf->rfcomm_dlc);
 }
 

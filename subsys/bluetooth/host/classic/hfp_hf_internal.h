@@ -193,6 +193,7 @@ struct bt_hfp_hf {
 	struct bt_rfcomm_dlc rfcomm_dlc;
 	/* ACL connection handle */
 	struct bt_conn *acl;
+	uint8_t disconnect_reason;
 	/* AT command sending queue */
 	at_finish_cb_t backup_finish;
 	struct k_fifo tx_pending;

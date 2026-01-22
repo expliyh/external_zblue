@@ -69,27 +69,27 @@ static void hf_remove_calls(void)
 	}
 }
 
-static void hf_connected(struct bt_conn *conn, struct bt_hfp_hf *hf)
+static void hf_connected(struct bt_conn *conn, struct bt_hfp_hf *hf, uint8_t err)
 {
 	hf_conn = conn;
 	hfp_hf = hf;
-	bt_shell_print("HF connected");
+	bt_shell_print("HF connected (err %u)", err);
 }
 
-static void hf_disconnected(struct bt_hfp_hf *hf)
+static void hf_disconnected(struct bt_hfp_hf *hf, uint8_t reason)
 {
 	hf_conn = NULL;
 	hfp_hf = NULL;
 	hf_remove_calls();
-	bt_shell_print("HF disconnected");
+	bt_shell_print("HF disconnected (reason %u)", reason);
 }
 
-static void hf_sco_connected(struct bt_hfp_hf *hf, struct bt_conn *sco_conn)
+static void hf_sco_connected(struct bt_hfp_hf *hf, struct bt_conn *sco_conn, uint8_t err)
 {
 	struct bt_conn_info info;
 	uint16_t handle;
 
-	bt_shell_print("HF SCO connected %p", sco_conn);
+	bt_shell_print("HF SCO connected %p (err %u)", sco_conn, err);
 
 	if (hf_sco_conn != NULL) {
 		bt_shell_warn("HF SCO conn %p exists", hf_sco_conn);

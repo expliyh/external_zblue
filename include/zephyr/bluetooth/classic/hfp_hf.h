@@ -162,8 +162,9 @@ struct bt_hfp_hf_cb {
 	 *
 	 *  @param conn Connection object.
 	 *  @param hf HFP HF object.
+	 *  @param err HCI error. Zero for success, non-zero otherwise.
 	 */
-	void (*connected)(struct bt_conn *conn, struct bt_hfp_hf *hf);
+	void (*connected)(struct bt_conn *conn, struct bt_hfp_hf *hf, uint8_t err);
 	/** HF disconnected callback to application
 	 *
 	 *  If this callback is provided it will be called whenever the
@@ -173,8 +174,9 @@ struct bt_hfp_hf_cb {
 	 *  callback `disconnected` returned.
 	 *
 	 *  @param hf HFP HF object.
+	 *  @param reason BT_HCI_ERR_* reason for the disconnection.
 	 */
-	void (*disconnected)(struct bt_hfp_hf *hf);
+	void (*disconnected)(struct bt_hfp_hf *hf, uint8_t reason);
 	/** HF SCO/eSCO connected Callback
 	 *
 	 *  If this callback is provided it will be called whenever the
@@ -182,8 +184,9 @@ struct bt_hfp_hf_cb {
 	 *
 	 *  @param hf HFP HF object.
 	 *  @param sco_conn SCO/eSCO Connection object.
+	 *  @param err HCI error. Zero for success, non-zero otherwise.
 	 */
-	void (*sco_connected)(struct bt_hfp_hf *hf, struct bt_conn *sco_conn);
+	void (*sco_connected)(struct bt_hfp_hf *hf, struct bt_conn *sco_conn, uint8_t err);
 	/** HF SCO/eSCO disconnected Callback
 	 *
 	 *  If this callback is provided it will be called whenever the
