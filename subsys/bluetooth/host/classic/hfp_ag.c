@@ -981,6 +981,10 @@ static int bt_hfp_ag_brsf_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 
 	ag->hf_features = hf_features;
 
+	if (bt_ag && bt_ag->connecting) {
+		bt_ag->connecting(ag->acl_conn, ag);
+	}
+
 	return hfp_ag_send_data(ag, NULL, NULL, "\r\n+BRSF:%d\r\n", ag->ag_features);
 }
 

@@ -117,6 +117,16 @@ struct bt_hfp_ag_ongoing_call {
 
 /** @brief HFP profile AG application callback */
 struct bt_hfp_ag_cb {
+	/** HF AG connecting callback to application
+	 *
+	 *  If this callback is provided it will be called whenever the
+	 *  AT command `AT+BRSF` is received during SLC establishment,
+	 *  before the AG connection completes.
+	 *
+	 *  @param conn Connection object.
+	 *  @param ag HFP AG object.
+	 */
+	void (*connecting)(struct bt_conn *conn, struct bt_hfp_ag *ag);
 	/** HF AG connected callback to application
 	 *
 	 *  If this callback is provided it will be called whenever the
