@@ -506,10 +506,14 @@ struct bt_hfp_ag_cb {
  *  required HFP details to display.
  *
  *  @param cb callback structure.
+ *  @param features Requested AG supported features bitmask. If 0, the compile-time
+ *         default BT_HFP_AG_SUPPORTED_FEATURES will be used. If non-zero, only the
+ *         features that are both requested and compile-time enabled will be adopted.
  *
- *  @return 0 in case of success or negative value in case of error.
+ *  @return Negative value in case of error, or the actually adopted features
+ *          bitmask (>= 0) on success.
  */
-int Z_API(bt_hfp_ag_register)(struct bt_hfp_ag_cb *cb);
+int32_t Z_API(bt_hfp_ag_register)(struct bt_hfp_ag_cb *cb, uint32_t features);
 
 /** @brief Create the hfp ag session
  *

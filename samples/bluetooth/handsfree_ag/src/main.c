@@ -381,7 +381,7 @@ static void bt_ready(int err)
 
 	bt_br_discovery_cb_register(&discovery_cb);
 
-	Z_API(bt_hfp_ag_register)(&ag_cb);
+	Z_API(bt_hfp_ag_register)(&ag_cb, 0);
 
 	k_work_init(&discover_work, discover_work_handler);
 

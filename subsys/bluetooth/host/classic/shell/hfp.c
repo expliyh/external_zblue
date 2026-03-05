@@ -1365,16 +1365,17 @@ static struct bt_hfp_ag_cb ag_cb = {
 
 static int cmd_ag_reg_enable(const struct shell *sh, size_t argc, char **argv)
 {
-	int err;
+	int32_t ret;
 
-	err = bt_hfp_ag_register(&ag_cb);
-	if (err) {
-		shell_error(sh, "Callback register failed: %d", err);
+	ret = bt_hfp_ag_register(&ag_cb, 0);
+	if (ret < 0) {
+		shell_error(sh, "Callback register failed: %d", ret);
+		return ret;
 	}
 
-	return err;
+	shell_print(sh, "AG registered, features: 0x%08x", (uint32_t)ret);
+	return 0;
 }
-
 static int cmd_ag_connect(const struct shell *sh, size_t argc, char **argv)
 {
 	int err;

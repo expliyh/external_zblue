@@ -72,6 +72,7 @@ NET_BUF_POOL_FIXED_DEFINE(ag_pool, CONFIG_BT_HFP_AG_TX_BUF_COUNT,
 static struct bt_hfp_ag bt_hfp_ag_pool[CONFIG_BT_MAX_CONN];
 
 static struct bt_hfp_ag_cb *bt_ag;
+static uint32_t bt_ag_registered_features;
 
 #define AG_SUPT_FEAT(ag, _feature) ((ag->ag_features & (_feature)) != 0)
 #define HF_SUPT_FEAT(ag, _feature) ((ag->hf_features & (_feature)) != 0)
@@ -3959,7 +3960,7 @@ static struct bt_hfp_ag *hfp_ag_create(struct bt_conn *conn)
 	ag->rfcomm_dlc.mtu = BT_HFP_MAX_MTU;
 
 	/* Set the supported features*/
-	ag->ag_features = BT_HFP_AG_SUPPORTED_FEATURES;
+	ag->ag_features = bt_ag_registered_features;
 	ag->ag_features |= BT_FEAT_SC(conn->hdev->features) ? BT_HFP_AG_FEATURE_ESCO_S4 : 0;
 
 	/* Support HF indicators */
@@ -4170,7 +4171,7 @@ static void hfp_ag_deinit(void)
 	bt_sco_conn_cb_unregister(&ag_sco_conn_cb);
 }
 
-int Z_API(bt_hfp_ag_register)(struct bt_hfp_ag_cb *cb)
+int32_t Z_API(bt_hfp_ag_register)(struct bt_hfp_ag_cb *cb, uint32_t features)
 {
 	if (!cb) {
 		return -EINVAL;
@@ -4181,10 +4182,13 @@ int Z_API(bt_hfp_ag_register)(struct bt_hfp_ag_cb *cb)
 	}
 
 	bt_ag = cb;
+	bt_ag_registered_features = features ?
+		(features & BT_HFP_AG_SUPPORTED_FEATURES) :
+		BT_HFP_AG_SUPPORTED_FEATURES;
 
 	hfp_ag_init();
 
-	return 0;
+	return (int32_t)bt_ag_registered_features;
 }
 
 int Z_API(bt_hfp_ag_unregister)(void)
@@ -4196,6 +4200,7 @@ int Z_API(bt_hfp_ag_unregister)(void)
 	hfp_ag_disconnect_all();
 	
 	bt_ag = NULL;
+	bt_ag_registered_features = 0;
 
 	hfp_ag_deinit();
 
