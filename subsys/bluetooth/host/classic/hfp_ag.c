@@ -2121,6 +2121,11 @@ static int bt_hfp_ag_chld_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 		return -ENOTSUP;
 	}
 
+	/* Notify upper layer before processing internally */
+	if (bt_ag && bt_ag->chld) {
+		bt_ag->chld(ag, value);
+	}
+
 	switch (value) {
 	case BT_HFP_CHLD_RELEASE_ALL:
 		return chld_release_all(ag);

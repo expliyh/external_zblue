@@ -468,6 +468,17 @@ struct bt_hfp_ag_cb {
 	void (*hf_indicator_value)(struct bt_hfp_ag *ag, enum hfp_ag_hf_indicators indicator,
 				   uint32_t value);
 
+	/** AT+CHLD execute command passthrough callback
+	 *
+	 *  If this callback is provided it will be called whenever an AT+CHLD=<value>
+	 *  execute command is received from HF, before the stack processes it internally.
+	 *  This allows the upper layer to observe all CHLD commands.
+	 *
+	 *  @param ag HFP AG object.
+	 *  @param value The CHLD command value (e.g. 0, 1, 2, 3, 4, 11, 21, ...).
+	 */
+	void (*chld)(struct bt_hfp_ag *ag, uint32_t value);
+
 	/** Vendor specific / custom AT command callback
 	 *
 	 *  If this callback is provided it will be called whenever an AT command
