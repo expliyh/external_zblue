@@ -1485,6 +1485,7 @@ static struct bt_conn *bt_hfp_ag_create_sco(struct bt_hfp_ag *ag)
 static int hfp_ag_open_sco(struct bt_hfp_ag *ag, struct bt_hfp_ag_call *call)
 {
 	bool create_sco;
+	bool sco_connecting = false;
 
 	if (atomic_test_bit(ag->flags, BT_HFP_AG_CREATING_SCO)) {
 		LOG_WRN("SCO connection is creating!");
@@ -1492,9 +1493,20 @@ static int hfp_ag_open_sco(struct bt_hfp_ag *ag, struct bt_hfp_ag_call *call)
 	}
 
 	hfp_ag_lock(ag);
-	create_sco = (ag->sco_conn == NULL) ? true : false;
-	if (create_sco) {
+	/* Check both sco_conn and sco_chan.sco to avoid race condition:
+	 * When remote initiates eSCO, bt_hfp_ag_sco_accept sets sco_chan
+	 * before sco_conn is set in the connected callback. Without this
+	 * check, AG may send a duplicate Setup Synchronous Connection. */
+	if (ag->sco_conn == NULL && ag->sco_chan.sco == NULL) {
+		create_sco = true;
 		atomic_set_bit(ag->flags, BT_HFP_AG_CREATING_SCO);
+	} else if (ag->sco_conn == NULL && ag->sco_chan.sco != NULL) {
+		/* Remote initiated eSCO is in progress, just track the call */
+		sco_connecting = true;
+		create_sco = false;
+	} else {
+		create_sco = false;
+		sco_connecting = false;
 	}
 	hfp_ag_unlock(ag);
 
@@ -1515,6 +1527,13 @@ static int hfp_ag_open_sco(struct bt_hfp_ag *ag, struct bt_hfp_ag_call *call)
 		}
 
 		LOG_DBG("SCO connection created (%p)", sco_conn);
+	} else if (sco_connecting) {
+		/* Remote initiated eSCO is in progress, set CALL_OPEN_SCO so
+		 * hfp_ag_sco_connected callback can properly update call state */
+		LOG_DBG("Remote eSCO in progress, tracking call");
+		if (call) {
+			atomic_set_bit(call->flags, BT_HFP_AG_CALL_OPEN_SCO);
+		}
 	} else {
 		if (call) {
 			if ((call->call_state == BT_HFP_CALL_INCOMING) ||
@@ -2667,7 +2686,7 @@ static int bt_hfp_ag_bcc_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 		return -ENOTSUP;
 	}
 
-	if (ag->sco_conn != NULL) {
+	if (ag->sco_conn != NULL || ag->sco_chan.sco != NULL) {
 		hfp_ag_unlock(ag);
 		return -ECONNREFUSED;
 	}
@@ -4999,8 +5018,8 @@ int Z_API(bt_hfp_ag_audio_connect)(struct bt_hfp_ag *ag, uint8_t id)
 		}
 	}
 
-	if (ag->sco_conn != NULL) {
-		LOG_ERR("Audio conenction has been connected");
+	if (ag->sco_conn != NULL || ag->sco_chan.sco != NULL) {
+		LOG_ERR("Audio connection has been connected or is connecting");
 		hfp_ag_unlock(ag);
 		return -ECONNREFUSED;
 	}
