@@ -30,7 +30,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_sco);
 
-struct bt_sco_server *sco_server;
+static struct bt_sco_server *sco_server_head;
 
 #define SCO_CHAN(_sco) ((_sco)->sco.chan);
 
@@ -38,13 +38,11 @@ static sys_slist_t sco_conn_cbs = SYS_SLIST_STATIC_INIT(&sco_conn_cbs);
 
 int bt_sco_server_register(struct bt_sco_server *server)
 {
+	struct bt_sco_server *iter;
+
 	CHECKIF(!server) {
 		LOG_DBG("Invalid parameter: server %p", server);
 		return -EINVAL;
-	}
-
-	if (sco_server) {
-		return -EADDRINUSE;
 	}
 
 	if (!server->accept) {
@@ -55,27 +53,40 @@ int bt_sco_server_register(struct bt_sco_server *server)
 		return -EINVAL;
 	}
 
+	/* Check for duplicate registration */
+	for (iter = sco_server_head; iter; iter = iter->_next) {
+		if (iter == server) {
+			return -EALREADY;
+		}
+	}
+
 	LOG_DBG("%p", server);
 
-	sco_server = server;
+	/* Insert at head */
+	server->_next = sco_server_head;
+	sco_server_head = server;
 
 	return 0;
 }
 
 int bt_sco_server_unregister(struct bt_sco_server *server)
 {
+	struct bt_sco_server **curr;
+
 	CHECKIF(!server) {
 		LOG_DBG("Invalid parameter: server %p", server);
 		return -EINVAL;
 	}
 
-	if (sco_server != server) {
-		return -EINVAL;
+	for (curr = &sco_server_head; *curr; curr = &(*curr)->_next) {
+		if (*curr == server) {
+			*curr = server->_next;
+			server->_next = NULL;
+			return 0;
+		}
 	}
 
-	sco_server = NULL;
-
-	return 0;
+	return -ENOENT;
 }
 
 static void notify_connected(struct bt_conn *conn)
@@ -169,11 +180,21 @@ void bt_sco_disconnected(struct bt_conn *sco)
 
 static uint8_t sco_server_check_security(struct bt_conn *conn)
 {
+	bt_security_t min_level = BT_SECURITY_L4;
+	struct bt_sco_server *server;
+
 	if (IS_ENABLED(CONFIG_BT_CONN_DISABLE_SECURITY)) {
 		return BT_HCI_ERR_SUCCESS;
 	}
 
-	if (conn->sec_level >= sco_server->sec_level) {
+	/* Use the lowest security level among all registered servers */
+	for (server = sco_server_head; server; server = server->_next) {
+		if (server->sec_level < min_level) {
+			min_level = server->sec_level;
+		}
+	}
+
+	if (conn->sec_level >= min_level) {
 		return BT_HCI_ERR_SUCCESS;
 	}
 
@@ -257,6 +278,7 @@ static int sco_accept(struct bt_conn *acl, struct bt_conn *sco)
 {
 	struct bt_sco_accept_info accept_info;
 	struct bt_sco_chan *chan;
+	struct bt_sco_server *server;
 	int err;
 
 	CHECKIF(!sco || sco->type != BT_CONN_TYPE_SCO) {
@@ -270,13 +292,19 @@ static int sco_accept(struct bt_conn *acl, struct bt_conn *sco)
 	memcpy(accept_info.dev_class, sco->sco.dev_class, sizeof(accept_info.dev_class));
 	accept_info.link_type = sco->sco.link_type;
 
-	err = sco_server->accept(&accept_info, &chan);
-	if (err < 0) {
-		LOG_ERR("Server failed to accept: %d", err);
-		return err;
+	for (server = sco_server_head; server; server = server->_next) {
+		err = server->accept(&accept_info, &chan);
+		if (err == 0) {
+			break;
+		}
 	}
 
-	if (chan->ops == NULL) {
+	if (!server) {
+		LOG_ERR("No server accepted the connection");
+		return -ENOENT;
+	}
+
+	if (chan == NULL || chan->ops == NULL) {
 		LOG_ERR("invalid parameter: chan %p chan->ops %p", chan, chan->ops);
 		return -EINVAL;
 	}
@@ -325,7 +353,7 @@ uint8_t bt_esco_conn_req(struct bt_dev *hdev, struct bt_hci_evt_conn_request *ev
 	struct bt_conn *sco_conn;
 	uint8_t sec_err;
 
-	if (sco_server == NULL) {
+	if (sco_server_head == NULL) {
 		LOG_ERR("No SCO server registered");
 		return BT_HCI_ERR_UNSPECIFIED;
 	}

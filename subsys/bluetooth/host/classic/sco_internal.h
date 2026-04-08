@@ -104,6 +104,9 @@ struct bt_sco_server {
 	 */
 	int (*accept)(const struct bt_sco_accept_info *info,
 			  struct bt_sco_chan **chan);
+
+	/** @internal Internally used field for list handling */
+	struct bt_sco_server	*_next;
 };
 
 /** @brief Register SCO server.
