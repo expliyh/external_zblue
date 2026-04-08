@@ -2371,7 +2371,9 @@ static int bt_hfp_ag_chup_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 		}
 
 		call_state = call->call_state;
-		if (call_state == BT_HFP_CALL_ALERTING) {
+		if (call_state == BT_HFP_CALL_ALERTING ||
+		    call_state == BT_HFP_CALL_OUTGOING ||
+		    call_state == BT_HFP_CALL_INCOMING) {
 			if (!atomic_test_bit(call->flags, BT_HFP_AG_CALL_INCOMING)) {
 				next_step = bt_hfp_ag_call_terminate;
 			} else {
