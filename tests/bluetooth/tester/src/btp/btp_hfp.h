@@ -56,6 +56,11 @@ struct btp_hfp_send_dtmf_cmd {
 	uint8_t code;
 } __packed;
 
+#define BTP_HFP_CONNECT_ACL			0x09
+struct btp_hfp_connect_acl_cmd {
+	bt_addr_le_t address;
+} __packed;
+
 /* events */
 #define BTP_HFP_EV_CONNECTED			0x80
 struct btp_hfp_connected_ev {

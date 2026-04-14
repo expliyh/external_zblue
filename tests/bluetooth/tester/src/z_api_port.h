@@ -291,6 +291,9 @@ extern int z_bt_hfp_set_volume(const uint8_t *addr,
                                uint8_t type, uint8_t volume);
 extern int z_bt_hfp_send_dtmf(const uint8_t *addr, uint8_t code);
 
+/* HFP ACL-only connection (no RFCOMM/SLC) */
+extern int z_bt_hfp_connect_acl(const uint8_t *addr);
+
 /* ============================================================
  * PAN APIs
  * ============================================================ */

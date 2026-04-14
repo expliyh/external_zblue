@@ -32,6 +32,8 @@ extern int z_bt_hfp_dial(const uint8_t *addr, const char *number);
 extern int z_bt_hfp_set_volume(const uint8_t *addr,
 			       uint8_t type, uint8_t volume);
 extern int z_bt_hfp_send_dtmf(const uint8_t *addr, uint8_t code);
+extern int z_bt_hfp_init(void);
+extern int z_bt_hfp_connect_acl(const uint8_t *addr);
 
 static uint8_t supported_commands(const void *cmd, uint16_t cmd_len,
 				  void *rsp, uint16_t *rsp_len)
@@ -46,6 +48,7 @@ static uint8_t supported_commands(const void *cmd, uint16_t cmd_len,
 	tester_set_bit(rp->data, BTP_HFP_DIAL);
 	tester_set_bit(rp->data, BTP_HFP_SET_VOLUME);
 	tester_set_bit(rp->data, BTP_HFP_SEND_DTMF);
+	tester_set_bit(rp->data, BTP_HFP_CONNECT_ACL);
 
 	*rsp_len = sizeof(*rp) + 2;
 
@@ -181,6 +184,23 @@ static uint8_t hfp_send_dtmf(const void *cmd, uint16_t cmd_len,
 	return BTP_STATUS_SUCCESS;
 }
 
+static uint8_t hfp_connect_acl(const void *cmd, uint16_t cmd_len,
+			       void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_connect_acl_cmd *cp = cmd;
+	int err;
+
+	LOG_INF("HFP connect ACL only");
+
+	err = z_bt_hfp_connect_acl((const uint8_t *)&cp->address);
+	if (err) {
+		LOG_ERR("HFP connect ACL failed: %d", err);
+		return BTP_STATUS_FAILED;
+	}
+
+	return BTP_STATUS_SUCCESS;
+}
+
 /* Callbacks from z_api HFP layer */
 void btp_hfp_connected_cb(const uint8_t *addr)
 {
@@ -255,12 +275,24 @@ static const struct btp_handler handlers[] = {
 		.expect_len = sizeof(struct btp_hfp_send_dtmf_cmd),
 		.func = hfp_send_dtmf,
 	},
+	{
+		.opcode = BTP_HFP_CONNECT_ACL,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_connect_acl_cmd),
+		.func = hfp_connect_acl,
+	},
 };
 
 uint8_t tester_init_hfp(void)
 {
 	tester_register_command_handlers(BTP_SERVICE_ID_HFP, handlers,
 					ARRAY_SIZE(handlers));
+
+	/* Register HFP callbacks early so that incoming connections
+	 * from PTS (IUT as acceptor) are properly handled.
+	 * hfp_init_in_ipc has a guard to prevent double registration.
+	 */
+	z_bt_hfp_init();
 
 	LOG_INF("HFP service initialized");
 
