@@ -36,6 +36,7 @@ extern int z_bt_hfp_init(void);
 extern int z_bt_hfp_connect_acl(const uint8_t *addr);
 extern int z_bt_hfp_connect_audio(const uint8_t *addr);
 extern int z_bt_hfp_disconnect_audio(const uint8_t *addr);
+extern int z_bt_hfp_terminate_call(const uint8_t *addr);
 
 static uint8_t supported_commands(const void *cmd, uint16_t cmd_len,
 				  void *rsp, uint16_t *rsp_len)
@@ -53,6 +54,7 @@ static uint8_t supported_commands(const void *cmd, uint16_t cmd_len,
 	tester_set_bit(rp->data, BTP_HFP_CONNECT_ACL);
 	tester_set_bit(rp->data, BTP_HFP_CONNECT_AUDIO);
 	tester_set_bit(rp->data, BTP_HFP_DISCONNECT_AUDIO);
+	tester_set_bit(rp->data, BTP_HFP_TERMINATE_CALL);
 
 	*rsp_len = sizeof(*rp) + 2;
 
@@ -239,6 +241,23 @@ static uint8_t hfp_disconnect_audio(const void *cmd, uint16_t cmd_len,
 	return BTP_STATUS_SUCCESS;
 }
 
+static uint8_t hfp_terminate_call(const void *cmd, uint16_t cmd_len,
+				  void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_terminate_call_cmd *cp = cmd;
+	int err;
+
+	LOG_INF("HFP terminate call");
+
+	err = z_bt_hfp_terminate_call((const uint8_t *)&cp->address);
+	if (err) {
+		LOG_ERR("HFP terminate call failed: %d", err);
+		return BTP_STATUS_FAILED;
+	}
+
+	return BTP_STATUS_SUCCESS;
+}
+
 /* Callbacks from z_api HFP layer */
 void btp_hfp_connected_cb(const uint8_t *addr)
 {
@@ -343,6 +362,12 @@ static const struct btp_handler handlers[] = {
 		.index = BTP_INDEX,
 		.expect_len = sizeof(struct btp_hfp_disconnect_audio_cmd),
 		.func = hfp_disconnect_audio,
+	},
+	{
+		.opcode = BTP_HFP_TERMINATE_CALL,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_terminate_call_cmd),
+		.func = hfp_terminate_call,
 	},
 };
 

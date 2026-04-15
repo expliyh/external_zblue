@@ -71,6 +71,11 @@ struct btp_hfp_disconnect_audio_cmd {
 	bt_addr_le_t address;
 } __packed;
 
+#define BTP_HFP_TERMINATE_CALL			0x0c
+struct btp_hfp_terminate_call_cmd {
+	bt_addr_le_t address;
+} __packed;
+
 /* events */
 #define BTP_HFP_EV_CONNECTED			0x80
 struct btp_hfp_connected_ev {

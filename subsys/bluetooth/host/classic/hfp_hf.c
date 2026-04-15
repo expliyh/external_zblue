@@ -3639,6 +3639,7 @@ int Z_API(bt_hfp_hf_audio_connect)(struct bt_hfp_hf *hf)
 	/* Use codec negotiation if both sides support it */
 	if ((hf->hf_features & BT_HFP_HF_FEATURE_CODEC_NEG) &&
 	    (hf->ag_features & BT_HFP_AG_FEATURE_CODEC_NEG)) {
+		LOG_INF("audio_connect: using codec negotiation (AT+BCC)");
 		err = hfp_hf_send_cmd(hf, NULL, bcc_finish, true,
 				      BT_HFP_HF_AT_CMD_BCC, "AT+BCC");
 		if (err < 0) {
@@ -3649,6 +3650,7 @@ int Z_API(bt_hfp_hf_audio_connect)(struct bt_hfp_hf *hf)
 #endif /* CONFIG_BT_HFP_HF_CODEC_NEG */
 
 	/* No codec negotiation: directly establish SCO with CVSD */
+	LOG_INF("audio_connect: direct SCO (no codec negotiation)");
 	{
 		static const struct bt_sco_chan_ops ops = {
 			.connected = hfp_hf_sco_connected,
