@@ -61,6 +61,16 @@ struct btp_hfp_connect_acl_cmd {
 	bt_addr_le_t address;
 } __packed;
 
+#define BTP_HFP_CONNECT_AUDIO			0x0a
+struct btp_hfp_connect_audio_cmd {
+	bt_addr_le_t address;
+} __packed;
+
+#define BTP_HFP_DISCONNECT_AUDIO		0x0b
+struct btp_hfp_disconnect_audio_cmd {
+	bt_addr_le_t address;
+} __packed;
+
 /* events */
 #define BTP_HFP_EV_CONNECTED			0x80
 struct btp_hfp_connected_ev {

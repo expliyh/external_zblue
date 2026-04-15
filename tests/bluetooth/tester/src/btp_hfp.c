@@ -34,6 +34,8 @@ extern int z_bt_hfp_set_volume(const uint8_t *addr,
 extern int z_bt_hfp_send_dtmf(const uint8_t *addr, uint8_t code);
 extern int z_bt_hfp_init(void);
 extern int z_bt_hfp_connect_acl(const uint8_t *addr);
+extern int z_bt_hfp_connect_audio(const uint8_t *addr);
+extern int z_bt_hfp_disconnect_audio(const uint8_t *addr);
 
 static uint8_t supported_commands(const void *cmd, uint16_t cmd_len,
 				  void *rsp, uint16_t *rsp_len)
@@ -49,6 +51,8 @@ static uint8_t supported_commands(const void *cmd, uint16_t cmd_len,
 	tester_set_bit(rp->data, BTP_HFP_SET_VOLUME);
 	tester_set_bit(rp->data, BTP_HFP_SEND_DTMF);
 	tester_set_bit(rp->data, BTP_HFP_CONNECT_ACL);
+	tester_set_bit(rp->data, BTP_HFP_CONNECT_AUDIO);
+	tester_set_bit(rp->data, BTP_HFP_DISCONNECT_AUDIO);
 
 	*rsp_len = sizeof(*rp) + 2;
 
@@ -201,6 +205,40 @@ static uint8_t hfp_connect_acl(const void *cmd, uint16_t cmd_len,
 	return BTP_STATUS_SUCCESS;
 }
 
+static uint8_t hfp_connect_audio(const void *cmd, uint16_t cmd_len,
+				 void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_connect_audio_cmd *cp = cmd;
+	int err;
+
+	LOG_INF("HFP connect audio");
+
+	err = z_bt_hfp_connect_audio((const uint8_t *)&cp->address);
+	if (err) {
+		LOG_ERR("HFP connect audio failed: %d", err);
+		return BTP_STATUS_FAILED;
+	}
+
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t hfp_disconnect_audio(const void *cmd, uint16_t cmd_len,
+				    void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_disconnect_audio_cmd *cp = cmd;
+	int err;
+
+	LOG_INF("HFP disconnect audio");
+
+	err = z_bt_hfp_disconnect_audio((const uint8_t *)&cp->address);
+	if (err) {
+		LOG_ERR("HFP disconnect audio failed: %d", err);
+		return BTP_STATUS_FAILED;
+	}
+
+	return BTP_STATUS_SUCCESS;
+}
+
 /* Callbacks from z_api HFP layer */
 void btp_hfp_connected_cb(const uint8_t *addr)
 {
@@ -223,6 +261,19 @@ void btp_hfp_disconnected_cb(const uint8_t *addr)
 	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
 
 	tester_event(BTP_SERVICE_ID_HFP, BTP_HFP_EV_DISCONNECTED,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_audio_state_cb(const uint8_t *addr, uint8_t state)
+{
+	struct btp_hfp_audio_state_ev ev;
+
+	LOG_INF("HFP audio state: %d", state);
+
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.state = state;
+
+	tester_event(BTP_SERVICE_ID_HFP, BTP_HFP_EV_AUDIO_STATE,
 		     &ev, sizeof(ev));
 }
 
@@ -280,6 +331,18 @@ static const struct btp_handler handlers[] = {
 		.index = BTP_INDEX,
 		.expect_len = sizeof(struct btp_hfp_connect_acl_cmd),
 		.func = hfp_connect_acl,
+	},
+	{
+		.opcode = BTP_HFP_CONNECT_AUDIO,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_connect_audio_cmd),
+		.func = hfp_connect_audio,
+	},
+	{
+		.opcode = BTP_HFP_DISCONNECT_AUDIO,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_disconnect_audio_cmd),
+		.func = hfp_disconnect_audio,
 	},
 };
 

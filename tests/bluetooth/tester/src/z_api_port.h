@@ -294,6 +294,10 @@ extern int z_bt_hfp_send_dtmf(const uint8_t *addr, uint8_t code);
 /* HFP ACL-only connection (no RFCOMM/SLC) */
 extern int z_bt_hfp_connect_acl(const uint8_t *addr);
 
+/* HFP audio (SCO) connection */
+extern int z_bt_hfp_connect_audio(const uint8_t *addr);
+extern int z_bt_hfp_disconnect_audio(const uint8_t *addr);
+
 /* ============================================================
  * PAN APIs
  * ============================================================ */
