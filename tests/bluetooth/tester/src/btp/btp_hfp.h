@@ -76,6 +76,51 @@ struct btp_hfp_terminate_call_cmd {
 	bt_addr_le_t address;
 } __packed;
 
+#define BTP_HFP_QUERY_CURRENT_CALLS		0x0d
+struct btp_hfp_query_current_calls_cmd {
+	bt_addr_le_t address;
+} __packed;
+
+#define BTP_HFP_GET_SUBSCRIBER_NUMBER		0x0e
+struct btp_hfp_get_subscriber_number_cmd {
+	bt_addr_le_t address;
+} __packed;
+
+#define BTP_HFP_START_VOICE_RECOGNITION		0x0f
+struct btp_hfp_start_voice_recognition_cmd {
+	bt_addr_le_t address;
+} __packed;
+
+#define BTP_HFP_STOP_VOICE_RECOGNITION		0x10
+struct btp_hfp_stop_voice_recognition_cmd {
+	bt_addr_le_t address;
+} __packed;
+
+#define BTP_HFP_CALL_CONTROL			0x11
+struct btp_hfp_call_control_cmd {
+	bt_addr_le_t address;
+	uint8_t chld;
+	uint8_t index;
+} __packed;
+
+#define BTP_HFP_UPDATE_BATTERY_LEVEL		0x12
+struct btp_hfp_update_battery_level_cmd {
+	bt_addr_le_t address;
+	uint8_t level;
+} __packed;
+
+#define BTP_HFP_QUERY_CALLS			0x0d
+struct btp_hfp_query_calls_cmd {
+	bt_addr_le_t address;
+} __packed;
+
+#define BTP_HFP_SEND_AT_CMD			0x0d
+struct btp_hfp_send_at_cmd_cmd {
+	bt_addr_le_t address;
+	uint8_t cmd_len;
+	uint8_t cmd[];
+} __packed;
+
 /* events */
 #define BTP_HFP_EV_CONNECTED			0x80
 struct btp_hfp_connected_ev {

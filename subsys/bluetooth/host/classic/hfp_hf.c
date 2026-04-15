@@ -4662,3 +4662,63 @@ struct bt_conn *Z_API(bt_hfp_hf_get_conn)(struct bt_hfp_hf *hf)
 
 	return bt_conn_ref(hf->acl);
 }
+
+int Z_API(bt_hfp_hf_send_clcc)(struct bt_conn *conn)
+{
+	size_t index;
+	struct bt_hfp_hf *hf;
+
+	if (!conn) {
+		return -EINVAL;
+	}
+
+	index = (size_t)bt_conn_index(conn);
+	if (index >= ARRAY_SIZE(bt_hfp_hf_pool)) {
+		return -EINVAL;
+	}
+
+	hf = &bt_hfp_hf_pool[index];
+	if (hf->acl != conn) {
+		LOG_ERR("HF not found for conn %p", conn);
+		return -ENOTCONN;
+	}
+
+	return hf_query_current_calls(hf);
+}
+
+int Z_API(bt_hfp_hf_send_volume)(struct bt_conn *conn, uint8_t type,
+				  uint8_t volume)
+{
+	size_t index;
+	struct bt_hfp_hf *hf;
+	int err;
+
+	if (!conn) {
+		return -EINVAL;
+	}
+
+	index = (size_t)bt_conn_index(conn);
+	if (index >= ARRAY_SIZE(bt_hfp_hf_pool)) {
+		return -EINVAL;
+	}
+
+	hf = &bt_hfp_hf_pool[index];
+	if (hf->acl != conn) {
+		LOG_ERR("HF not found for conn %p", conn);
+		return -ENOTCONN;
+	}
+
+	if (type == 1) {
+		/* Microphone gain: AT+VGM=<volume> */
+		err = hfp_hf_send_cmd(hf, NULL, vgm_finish, false,
+				      BT_HFP_HF_AT_CMD_VGM, "AT+VGM=%u",
+				      volume);
+	} else {
+		/* Speaker gain: AT+VGS=<volume> */
+		err = hfp_hf_send_cmd(hf, NULL, vgs_finish, false,
+				      BT_HFP_HF_AT_CMD_VGS, "AT+VGS=%u",
+				      volume);
+	}
+
+	return err;
+}
