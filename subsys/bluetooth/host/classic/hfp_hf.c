@@ -350,6 +350,8 @@ int hfp_hf_send_cmd(struct bt_hfp_hf *hf, at_resp_cb_t resp,
 		return ret;
 	}
 
+	LOG_INF("AT TX: %.*s", ret, (const char *)buf->data);
+
 	make_at_callback_set(buf->user_data, resp, finish, notify_result,
 			     cmd);
 
@@ -3613,9 +3615,12 @@ static int bcc_finish(struct at_client *hf_at, enum bt_at_result result,
 }
 #endif /* CONFIG_BT_HFP_HF_CODEC_NEG */
 
+static int hfp_hf_set_voice_setting(struct bt_hfp_hf *hf);
+static void hfp_hf_sco_connected(struct bt_sco_chan *chan);
+static void hfp_hf_sco_disconnected(struct bt_sco_chan *chan, uint8_t reason);
+
 int Z_API(bt_hfp_hf_audio_connect)(struct bt_hfp_hf *hf)
 {
-#if defined(CONFIG_BT_HFP_HF_CODEC_NEG)
 	int err;
 
 	LOG_DBG("");
@@ -3630,16 +3635,47 @@ int Z_API(bt_hfp_hf_audio_connect)(struct bt_hfp_hf *hf)
 		return -EALREADY;
 	}
 
-	err = hfp_hf_send_cmd(hf, NULL, bcc_finish, true, BT_HFP_HF_AT_CMD_BCC,
-			 "AT+BCC");
-	if (err < 0) {
-		LOG_ERR("Fail to setup audio connection on %p", hf);
+#if defined(CONFIG_BT_HFP_HF_CODEC_NEG)
+	/* Use codec negotiation if both sides support it */
+	if ((hf->hf_features & BT_HFP_HF_FEATURE_CODEC_NEG) &&
+	    (hf->ag_features & BT_HFP_AG_FEATURE_CODEC_NEG)) {
+		err = hfp_hf_send_cmd(hf, NULL, bcc_finish, true,
+				      BT_HFP_HF_AT_CMD_BCC, "AT+BCC");
+		if (err < 0) {
+			LOG_ERR("Fail to setup audio connection on %p", hf);
+		}
+		return err;
 	}
-
-	return err;
-#else
-	return -ENOTSUP;
 #endif /* CONFIG_BT_HFP_HF_CODEC_NEG */
+
+	/* No codec negotiation: directly establish SCO with CVSD */
+	{
+		static const struct bt_sco_chan_ops ops = {
+			.connected = hfp_hf_sco_connected,
+			.disconnected = hfp_hf_sco_disconnected,
+		};
+		struct bt_conn *sco_conn;
+
+		hf->active_codec_id = BT_HFP_HF_CODEC_CVSD;
+		hf->chan.ops = &ops;
+
+		err = hfp_hf_set_voice_setting(hf);
+		if (err < 0) {
+			LOG_ERR("Fail to set voice setting");
+			return err;
+		}
+
+		sco_conn = bt_conn_create_sco(hf->acl->hdev,
+					      &hf->acl->br.dst,
+					      &hf->chan);
+		if (!sco_conn) {
+			LOG_ERR("Fail to create SCO connection");
+			return -EIO;
+		}
+
+		bt_conn_unref(sco_conn);
+		return 0;
+	}
 }
 
 #if defined(CONFIG_BT_HFP_HF_CODEC_NEG)
@@ -4323,6 +4359,8 @@ static void hfp_hf_disconnected(struct bt_rfcomm_dlc *dlc)
 static void hfp_hf_recv(struct bt_rfcomm_dlc *dlc, struct net_buf *buf)
 {
 	struct bt_hfp_hf *hf = CONTAINER_OF(dlc, struct bt_hfp_hf, rfcomm_dlc);
+
+	LOG_INF("AT RX: %.*s", buf->len, (const char *)buf->data);
 
 	atomic_set_bit(hf->flags, BT_HFP_HF_FLAG_RX_ONGOING);
 	if (at_parse_input(&hf->at, buf) < 0) {
