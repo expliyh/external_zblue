@@ -30,6 +30,10 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_sco);
 
+#define SCO_SERVER_MAX 2
+
+static struct bt_sco_server *sco_servers[SCO_SERVER_MAX];
+/* Keep legacy pointer for minimal diff in security check */
 struct bt_sco_server *sco_server;
 
 #define SCO_CHAN(_sco) ((_sco)->sco.chan);
@@ -43,10 +47,6 @@ int bt_sco_server_register(struct bt_sco_server *server)
 		return -EINVAL;
 	}
 
-	if (sco_server) {
-		return -EADDRINUSE;
-	}
-
 	if (!server->accept) {
 		return -EINVAL;
 	}
@@ -55,11 +55,18 @@ int bt_sco_server_register(struct bt_sco_server *server)
 		return -EINVAL;
 	}
 
-	LOG_DBG("%p", server);
+	for (int i = 0; i < SCO_SERVER_MAX; i++) {
+		if (sco_servers[i] == NULL) {
+			sco_servers[i] = server;
+			if (!sco_server) {
+				sco_server = server;
+			}
+			LOG_DBG("%p slot %d", server, i);
+			return 0;
+		}
+	}
 
-	sco_server = server;
-
-	return 0;
+	return -EADDRINUSE;
 }
 
 int bt_sco_server_unregister(struct bt_sco_server *server)
@@ -69,13 +76,23 @@ int bt_sco_server_unregister(struct bt_sco_server *server)
 		return -EINVAL;
 	}
 
-	if (sco_server != server) {
-		return -EINVAL;
+	for (int i = 0; i < SCO_SERVER_MAX; i++) {
+		if (sco_servers[i] == server) {
+			sco_servers[i] = NULL;
+			if (sco_server == server) {
+				sco_server = NULL;
+				for (int j = 0; j < SCO_SERVER_MAX; j++) {
+					if (sco_servers[j]) {
+						sco_server = sco_servers[j];
+						break;
+					}
+				}
+			}
+			return 0;
+		}
 	}
 
-	sco_server = NULL;
-
-	return 0;
+	return -EINVAL;
 }
 
 static void notify_connected(struct bt_conn *conn)
@@ -270,9 +287,19 @@ static int sco_accept(struct bt_conn *acl, struct bt_conn *sco)
 	memcpy(accept_info.dev_class, sco->sco.dev_class, sizeof(accept_info.dev_class));
 	accept_info.link_type = sco->sco.link_type;
 
-	err = sco_server->accept(&accept_info, &chan);
+	/* Try each registered server until one accepts */
+	for (int i = 0; i < SCO_SERVER_MAX; i++) {
+		if (!sco_servers[i]) {
+			continue;
+		}
+		err = sco_servers[i]->accept(&accept_info, &chan);
+		if (err == 0) {
+			break;
+		}
+	}
+
 	if (err < 0) {
-		LOG_ERR("Server failed to accept: %d", err);
+		LOG_ERR("No server accepted SCO: %d", err);
 		return err;
 	}
 

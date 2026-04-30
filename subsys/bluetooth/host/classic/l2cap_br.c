@@ -1015,6 +1015,9 @@ destroy:
 	}
 }
 
+static struct bt_l2cap_br_chan *l2cap_br_remove_tx_cid(struct bt_conn *conn,
+						       uint16_t cid);
+
 static void l2cap_br_conn_req(struct bt_l2cap_br *l2cap, uint8_t ident,
 			      struct net_buf *buf)
 {
@@ -1059,13 +1062,30 @@ static void l2cap_br_conn_req(struct bt_l2cap_br *l2cap, uint8_t ident,
 
 	chan = bt_l2cap_br_lookup_tx_cid(conn, scid);
 	if (chan) {
-		/*
-		 * we have a chan here but this is due to SCID being already in
-		 * use so it is not channel we are suppose to pass to
-		 * l2cap_br_conn_req_reply as wrong DCID would be used
-		 */
-		result = BT_L2CAP_BR_ERR_SCID_IN_USE;
-		goto no_chan;
+		struct bt_l2cap_br_chan *old_br_chan = BR_CHAN(chan);
+
+		if (old_br_chan->state == BT_L2CAP_DISCONNECTING) {
+			/*
+			 * The old channel is being torn down (Disconnect Request
+			 * sent, waiting for Response). Force-clean it so the
+			 * remote can reuse the same Source CID for a new channel.
+			 * This avoids SCID_IN_USE rejection when the remote
+			 * recycles CIDs quickly (e.g. PTS SDP collision).
+			 */
+			LOG_WRN("SCID 0x%04x in DISCONNECTING state, force cleanup", scid);
+			l2cap_br_remove_tx_cid(conn, scid);
+			bt_l2cap_br_chan_del(chan);
+			chan = NULL;
+		} else {
+			/*
+			 * we have a chan here but this is due to SCID being
+			 * already in use so it is not channel we are suppose
+			 * to pass to l2cap_br_conn_req_reply as wrong DCID
+			 * would be used
+			 */
+			result = BT_L2CAP_BR_ERR_SCID_IN_USE;
+			goto no_chan;
+		}
 	}
 
 	/*

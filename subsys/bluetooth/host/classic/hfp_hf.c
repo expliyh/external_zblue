@@ -442,6 +442,7 @@ int Z_API(bt_hfp_hf_send_vendor)(struct bt_hfp_hf *hf, const char* cmd)
 	return err;
 }
 
+
 int brsf_handle(struct at_client *hf_at)
 {
 	struct bt_hfp_hf *hf = CONTAINER_OF(hf_at, struct bt_hfp_hf, at);
@@ -2304,11 +2305,24 @@ static void slc_completed(struct at_client *hf_at)
 
 	atomic_set_bit(hf->flags, BT_HFP_HF_FLAG_CONNECTED);
 
-	/* Start with first AT command */
+	/*
+	 * Post-SLC AT command init (VGM, VGS, CMEE, COPS, CLIP, CCWA) is
+	 * deferred to bt_hfp_hf_post_slc_init(). With async connected
+	 * callbacks (e.g. do_in_service_loop), the callback may send AT
+	 * commands (like VGS for volume sync) that must go out before the
+	 * init commands. The caller should invoke bt_hfp_hf_post_slc_init()
+	 * after processing the connected event.
+	 */
 	hf->cmd_init_seq = 0;
-	if (at_cmd_init_start(hf)) {
-		LOG_ERR("Fail to start AT command initialization");
+}
+
+int Z_API(bt_hfp_hf_post_slc_init)(struct bt_hfp_hf *hf)
+{
+	if (!atomic_test_bit(hf->flags, BT_HFP_HF_FLAG_CONNECTED)) {
+		return -ENOTCONN;
 	}
+
+	return at_cmd_init_start(hf);
 }
 
 #if defined(CONFIG_BT_HFP_HF_HF_INDICATORS)

@@ -1155,6 +1155,19 @@ int Z_API(bt_hfp_hf_query_list_of_current_calls)(struct bt_hfp_hf *hf);
  */
 int Z_API(bt_hfp_hf_send_vendor)(struct bt_hfp_hf *hf, const char* cmd);
 
+/** @brief Start post-SLC AT command initialization
+ *
+ *  Start sending post-SLC initialization AT commands (VGM, VGS, CMEE,
+ *  COPS, CLIP, CCWA). This should be called after the connected callback
+ *  has been processed, so that any AT commands sent by the application
+ *  during the callback (e.g., volume synchronization) are sent first.
+ *
+ *  @param hf HFP HF object.
+ *
+ *  @return 0 in case of success or negative value in case of error.
+ */
+int Z_API(bt_hfp_hf_post_slc_init)(struct bt_hfp_hf *hf);
+
 #ifdef __cplusplus
 }
 #endif
