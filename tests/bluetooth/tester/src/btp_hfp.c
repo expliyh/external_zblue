@@ -569,3 +569,535 @@ uint8_t tester_unregister_hfp(void)
 
 	return BTP_STATUS_SUCCESS;
 }
+
+/* ================================================================
+ * HFP AG BTP handlers
+ * ================================================================ */
+
+#include "btp/btp_hfp_ag.h"
+
+/* Forward declarations for z_api HFP AG functions */
+extern int z_bt_hfp_ag_init(void);
+extern int z_bt_hfp_connect_acl(const uint8_t *addr);
+extern int z_bt_hfp_ag_slc_connect(const uint8_t *addr);
+extern int z_bt_hfp_ag_slc_disconnect(const uint8_t *addr);
+extern int z_bt_hfp_ag_connect_audio(const uint8_t *addr);
+extern int z_bt_hfp_ag_disconnect_audio(const uint8_t *addr);
+extern int z_bt_hfp_ag_start_virtual_call(const uint8_t *addr);
+extern int z_bt_hfp_ag_stop_virtual_call(const uint8_t *addr);
+extern int z_bt_hfp_ag_phone_state_change(const uint8_t *addr,
+	uint8_t num_active, uint8_t num_held,
+	uint8_t call_state, uint8_t addr_type,
+	const char *number, const char *name);
+extern int z_bt_hfp_ag_volume_control(const uint8_t *addr,
+	uint8_t type, uint8_t volume);
+extern int z_bt_hfp_ag_start_voice_recognition(const uint8_t *addr);
+extern int z_bt_hfp_ag_stop_voice_recognition(const uint8_t *addr);
+extern int z_bt_hfp_ag_device_status(const uint8_t *addr,
+	uint8_t network, uint8_t roam, uint8_t signal, uint8_t battery);
+extern int z_bt_hfp_ag_send_at_cmd(const uint8_t *addr, const char *cmd);
+extern int z_bt_hfp_ag_clcc_response(const uint8_t *addr, uint32_t index,
+	uint8_t dir, uint8_t call_state, uint8_t mode, uint8_t mpty,
+	uint8_t addr_type, const char *number);
+extern int z_bt_hfp_ag_cind_response(const uint8_t *addr,
+	uint8_t network, uint8_t call, uint8_t callsetup,
+	uint8_t callheld, uint8_t signal, uint8_t roam, uint8_t battery);
+extern int z_bt_hfp_ag_dial_response(uint8_t result);
+
+static uint8_t ag_supported_commands(const void *cmd, uint16_t cmd_len,
+				     void *rsp, uint16_t *rsp_len)
+{
+	struct btp_hfp_ag_read_supported_commands_rp *rp = rsp;
+
+	memset(rp->data, 0, 3);
+	tester_set_bit(rp->data, BTP_HFP_AG_READ_SUPPORTED_COMMANDS);
+	tester_set_bit(rp->data, BTP_HFP_AG_CONNECT);
+	tester_set_bit(rp->data, BTP_HFP_AG_DISCONNECT);
+	tester_set_bit(rp->data, BTP_HFP_AG_CONNECT_AUDIO);
+	tester_set_bit(rp->data, BTP_HFP_AG_DISCONNECT_AUDIO);
+	tester_set_bit(rp->data, BTP_HFP_AG_PHONE_STATE_CHANGE);
+	tester_set_bit(rp->data, BTP_HFP_AG_VOLUME_CONTROL);
+	tester_set_bit(rp->data, BTP_HFP_AG_START_VR);
+	tester_set_bit(rp->data, BTP_HFP_AG_STOP_VR);
+	tester_set_bit(rp->data, BTP_HFP_AG_DEVICE_STATUS);
+	tester_set_bit(rp->data, BTP_HFP_AG_CLCC_RESPONSE);
+	tester_set_bit(rp->data, BTP_HFP_AG_CIND_RESPONSE);
+	tester_set_bit(rp->data, BTP_HFP_AG_DIAL_RESPONSE);
+	tester_set_bit(rp->data, BTP_HFP_AG_SEND_AT_CMD);
+	tester_set_bit(rp->data, BTP_HFP_AG_START_VIRTUAL_CALL);
+	tester_set_bit(rp->data, BTP_HFP_AG_STOP_VIRTUAL_CALL);
+
+	*rsp_len = 3;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_connect(const void *cmd, uint16_t cmd_len,
+			  void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_connect_cmd *cp = cmd;
+
+	LOG_INF("HFP AG connect");
+	if (z_bt_hfp_ag_slc_connect((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_disconnect(const void *cmd, uint16_t cmd_len,
+			     void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_disconnect_cmd *cp = cmd;
+
+	LOG_INF("HFP AG disconnect");
+	if (z_bt_hfp_ag_slc_disconnect((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_connect_audio(const void *cmd, uint16_t cmd_len,
+				void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_connect_audio_cmd *cp = cmd;
+
+	LOG_INF("HFP AG connect audio");
+	if (z_bt_hfp_ag_connect_audio((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_disconnect_audio(const void *cmd, uint16_t cmd_len,
+				   void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_disconnect_audio_cmd *cp = cmd;
+
+	LOG_INF("HFP AG disconnect audio");
+	if (z_bt_hfp_ag_disconnect_audio((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_phone_state_change(const void *cmd, uint16_t cmd_len,
+				     void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_phone_state_change_cmd *cp = cmd;
+	char number[81] = {0};
+
+	LOG_INF("HFP AG phone state change");
+
+	if (cp->number_len > 0 && cp->number_len <= 80)
+		memcpy(number, cp->number, cp->number_len);
+
+	if (z_bt_hfp_ag_phone_state_change((const uint8_t *)&cp->address,
+		cp->num_active, cp->num_held, cp->call_state,
+		cp->addr_type, number[0] ? number : NULL, NULL))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_volume_control(const void *cmd, uint16_t cmd_len,
+				 void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_volume_control_cmd *cp = cmd;
+
+	LOG_INF("HFP AG volume control");
+	if (z_bt_hfp_ag_volume_control((const uint8_t *)&cp->address,
+		cp->type, cp->volume))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_start_vr(const void *cmd, uint16_t cmd_len,
+			   void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_start_vr_cmd *cp = cmd;
+
+	LOG_INF("HFP AG start VR");
+	if (z_bt_hfp_ag_start_voice_recognition((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_stop_vr(const void *cmd, uint16_t cmd_len,
+			  void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_stop_vr_cmd *cp = cmd;
+
+	LOG_INF("HFP AG stop VR");
+	if (z_bt_hfp_ag_stop_voice_recognition((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_device_status(const void *cmd, uint16_t cmd_len,
+				void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_device_status_cmd *cp = cmd;
+
+	LOG_INF("HFP AG device status");
+	if (z_bt_hfp_ag_device_status((const uint8_t *)&cp->address,
+		cp->network, cp->roam, cp->signal, cp->battery))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_clcc_response(const void *cmd, uint16_t cmd_len,
+				void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_clcc_response_cmd *cp = cmd;
+	char number[81] = {0};
+
+	if (cp->number_len > 0 && cp->number_len <= 80)
+		memcpy(number, cp->number, cp->number_len);
+
+	if (z_bt_hfp_ag_clcc_response((const uint8_t *)&cp->address,
+		cp->index, cp->dir, cp->call_state, cp->mode, cp->mpty,
+		cp->addr_type, number[0] ? number : NULL))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_cind_response(const void *cmd, uint16_t cmd_len,
+				void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_cind_response_cmd *cp = cmd;
+
+	if (z_bt_hfp_ag_cind_response((const uint8_t *)&cp->address,
+		cp->network, cp->call, cp->callsetup, cp->callheld,
+		cp->signal, cp->roam, cp->battery))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_dial_response(const void *cmd, uint16_t cmd_len,
+				void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_dial_response_cmd *cp = cmd;
+
+	if (z_bt_hfp_ag_dial_response(cp->result))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_send_at_cmd(const void *cmd, uint16_t cmd_len,
+			      void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_send_at_cmd_cmd *cp = cmd;
+	char at_cmd[256] = {0};
+
+	if (cp->cmd_len > 0 && cp->cmd_len < 256)
+		memcpy(at_cmd, cp->cmd, cp->cmd_len);
+
+	LOG_INF("HFP AG send AT cmd: %s", at_cmd);
+	if (z_bt_hfp_ag_send_at_cmd((const uint8_t *)&cp->address, at_cmd))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_start_virtual_call(const void *cmd, uint16_t cmd_len,
+				     void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_start_virtual_call_cmd *cp = cmd;
+
+	LOG_INF("HFP AG start virtual call");
+	if (z_bt_hfp_ag_start_virtual_call((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_stop_virtual_call(const void *cmd, uint16_t cmd_len,
+				    void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_stop_virtual_call_cmd *cp = cmd;
+
+	LOG_INF("HFP AG stop virtual call");
+	if (z_bt_hfp_ag_stop_virtual_call((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+/* AG BTP event callbacks (called from z_api_hfp_ag.c) */
+
+void btp_hfp_ag_connected_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_connected_ev ev;
+
+	LOG_INF("HFP AG connected");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_CONNECTED,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_disconnected_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_disconnected_ev ev;
+
+	LOG_INF("HFP AG disconnected");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_DISCONNECTED,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_audio_state_cb(const uint8_t *addr, uint8_t state)
+{
+	struct btp_hfp_ag_audio_state_ev ev;
+
+	LOG_INF("HFP AG audio state: %d", state);
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.state = state;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_AUDIO_STATE,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_vr_state_cb(const uint8_t *addr, bool started)
+{
+	struct btp_hfp_ag_vr_state_ev ev;
+
+	LOG_INF("HFP AG VR state: %d", started);
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.started = started ? 1 : 0;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_VR_STATE,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_battery_update_cb(const uint8_t *addr, uint8_t level)
+{
+	struct btp_hfp_ag_battery_update_ev ev;
+
+	LOG_INF("HFP AG battery update: %d", level);
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.level = level;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_BATTERY_UPDATE,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_volume_cb(const uint8_t *addr, uint8_t type, uint8_t vol)
+{
+	struct btp_hfp_ag_volume_control_ev ev;
+
+	LOG_INF("HFP AG volume: type=%d vol=%d", type, vol);
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.type = type;
+	ev.volume = vol;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_VOLUME_CONTROL,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_answer_call_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_answer_call_ev ev;
+
+	LOG_INF("HFP AG answer call");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_ANSWER_CALL,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_reject_call_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_reject_call_ev ev;
+
+	LOG_INF("HFP AG reject call");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_REJECT_CALL,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_hangup_call_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_hangup_call_ev ev;
+
+	LOG_INF("HFP AG hangup call");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_HANGUP_CALL,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_dial_cb(const uint8_t *addr, const char *number)
+{
+	uint8_t buf[sizeof(struct btp_hfp_ag_dial_ev) + 80];
+	struct btp_hfp_ag_dial_ev *ev = (void *)buf;
+	uint8_t num_len = 0;
+
+	LOG_INF("HFP AG dial: %s", number ? number : "(redial)");
+	memcpy(&ev->address, addr, sizeof(bt_addr_le_t));
+	if (number) {
+		num_len = strlen(number);
+		if (num_len > 80)
+			num_len = 80;
+		memcpy(ev->number, number, num_len);
+	}
+	ev->number_len = num_len;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_DIAL,
+		     buf, sizeof(struct btp_hfp_ag_dial_ev) + num_len);
+}
+
+void btp_hfp_ag_at_cmd_cb(const uint8_t *addr, const char *cmd)
+{
+	uint8_t buf[sizeof(struct btp_hfp_ag_at_cmd_ev) + 255];
+	struct btp_hfp_ag_at_cmd_ev *ev = (void *)buf;
+	uint8_t cmd_len = 0;
+
+	LOG_INF("HFP AG AT cmd: %s", cmd ? cmd : "");
+	memcpy(&ev->address, addr, sizeof(bt_addr_le_t));
+	if (cmd) {
+		cmd_len = strlen(cmd);
+		if (cmd_len > 255)
+			cmd_len = 255;
+		memcpy(ev->cmd, cmd, cmd_len);
+	}
+	ev->cmd_len = cmd_len;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_AT_CMD,
+		     buf, sizeof(struct btp_hfp_ag_at_cmd_ev) + cmd_len);
+}
+
+void btp_hfp_ag_clcc_request_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_clcc_request_ev ev;
+
+	LOG_INF("HFP AG CLCC request");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_CLCC_REQUEST,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_cind_request_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_cind_request_ev ev;
+
+	LOG_INF("HFP AG CIND request");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_CIND_REQUEST,
+		     &ev, sizeof(ev));
+}
+
+static uint8_t ag_connect_acl(const void *cmd, uint16_t cmd_len,
+			      void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_connect_acl_cmd *cp = cmd;
+
+	LOG_INF("HFP AG connect ACL only");
+	if (z_bt_hfp_connect_acl((const uint8_t *)&cp->address))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static const struct btp_handler ag_handlers[] = {
+	{
+		.opcode = BTP_HFP_AG_READ_SUPPORTED_COMMANDS,
+		.index = BTP_INDEX_NONE,
+		.expect_len = 0,
+		.func = ag_supported_commands,
+	},
+	{
+		.opcode = BTP_HFP_AG_CONNECT,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_connect_cmd),
+		.func = ag_connect,
+	},
+	{
+		.opcode = BTP_HFP_AG_DISCONNECT,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_disconnect_cmd),
+		.func = ag_disconnect,
+	},
+	{
+		.opcode = BTP_HFP_AG_CONNECT_AUDIO,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_connect_audio_cmd),
+		.func = ag_connect_audio,
+	},
+	{
+		.opcode = BTP_HFP_AG_DISCONNECT_AUDIO,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_disconnect_audio_cmd),
+		.func = ag_disconnect_audio,
+	},
+	{
+		.opcode = BTP_HFP_AG_PHONE_STATE_CHANGE,
+		.index = BTP_INDEX,
+		.expect_len = BTP_HANDLER_LENGTH_VARIABLE,
+		.func = ag_phone_state_change,
+	},
+	{
+		.opcode = BTP_HFP_AG_VOLUME_CONTROL,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_volume_control_cmd),
+		.func = ag_volume_control,
+	},
+	{
+		.opcode = BTP_HFP_AG_START_VR,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_start_vr_cmd),
+		.func = ag_start_vr,
+	},
+	{
+		.opcode = BTP_HFP_AG_STOP_VR,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_stop_vr_cmd),
+		.func = ag_stop_vr,
+	},
+	{
+		.opcode = BTP_HFP_AG_DEVICE_STATUS,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_device_status_cmd),
+		.func = ag_device_status,
+	},
+	{
+		.opcode = BTP_HFP_AG_CLCC_RESPONSE,
+		.index = BTP_INDEX,
+		.expect_len = BTP_HANDLER_LENGTH_VARIABLE,
+		.func = ag_clcc_response,
+	},
+	{
+		.opcode = BTP_HFP_AG_CIND_RESPONSE,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_cind_response_cmd),
+		.func = ag_cind_response,
+	},
+	{
+		.opcode = BTP_HFP_AG_DIAL_RESPONSE,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_dial_response_cmd),
+		.func = ag_dial_response,
+	},
+	{
+		.opcode = BTP_HFP_AG_SEND_AT_CMD,
+		.index = BTP_INDEX,
+		.expect_len = BTP_HANDLER_LENGTH_VARIABLE,
+		.func = ag_send_at_cmd,
+	},
+	{
+		.opcode = BTP_HFP_AG_START_VIRTUAL_CALL,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_start_virtual_call_cmd),
+		.func = ag_start_virtual_call,
+	},
+	{
+		.opcode = BTP_HFP_AG_STOP_VIRTUAL_CALL,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_stop_virtual_call_cmd),
+		.func = ag_stop_virtual_call,
+	},
+	{
+		.opcode = BTP_HFP_AG_CONNECT_ACL,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_connect_acl_cmd),
+		.func = ag_connect_acl,
+	},
+};
+
+uint8_t tester_init_hfp_ag(void)
+{
+	tester_register_command_handlers(BTP_SERVICE_ID_HFP_AG, ag_handlers,
+					ARRAY_SIZE(ag_handlers));
+
+	z_bt_hfp_ag_init();
+
+	LOG_INF("HFP AG service initialized");
+	return BTP_STATUS_SUCCESS;
+}
+
+uint8_t tester_unregister_hfp_ag(void)
+{
+	LOG_INF("HFP AG service unregistered");
+	return BTP_STATUS_SUCCESS;
+}

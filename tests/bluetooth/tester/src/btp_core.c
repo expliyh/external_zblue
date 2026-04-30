@@ -294,6 +294,9 @@ static uint8_t register_service(const void *cmd, uint16_t cmd_len,
 	case BTP_SERVICE_ID_HID:
 		status = tester_init_hid();
 		break;
+	case BTP_SERVICE_ID_HFP_AG:
+		status = tester_init_hfp_ag();
+		break;
 	default:
 		LOG_WRN("unknown id: 0x%02x", cp->id);
 		status = BTP_STATUS_FAILED;
@@ -464,6 +467,9 @@ static uint8_t unregister_service(const void *cmd, uint16_t cmd_len,
 		break;
 	case BTP_SERVICE_ID_HID:
 		status = tester_unregister_hid();
+		break;
+	case BTP_SERVICE_ID_HFP_AG:
+		status = tester_unregister_hfp_ag();
 		break;
 	default:
 		LOG_WRN("unknown id: 0x%x", cp->id);
