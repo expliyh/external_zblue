@@ -586,6 +586,18 @@ int Z_API(bt_hfp_ag_accept)(struct bt_hfp_ag_call *call);
  */
 int Z_API(bt_hfp_ag_terminate)(struct bt_hfp_ag_call *call);
 
+/** @brief Clear call indicators without a tracked call object
+ *
+ *  Clear call and callsetup indicators for pre-existing calls that were
+ *  reported via CIND but not tracked in the AG call array (e.g., call
+ *  placed before SLC establishment).
+ *
+ *  @param ag HFP AG object.
+ *
+ *  @return 0 in case of success or negative value in case of error.
+ */
+int Z_API(bt_hfp_ag_clear_call_indicator)(struct bt_hfp_ag *ag);
+
 /** @brief Retrieve the held call
  *
  *  Retrieve the held call.

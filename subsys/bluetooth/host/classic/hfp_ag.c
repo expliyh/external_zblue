@@ -439,6 +439,7 @@ static int hfp_ag_send_data(struct bt_hfp_ag *ag, bt_hfp_ag_tx_cb_t cb, void *us
 	net_buf_add(buf, err);
 
 	LOG_HEXDUMP_DBG(buf->data, buf->len, "Sending:");
+	LOG_INF("AG AT TX: %.*s", buf->len, (const char *)buf->data);
 
 	hfp_ag_lock(ag);
 	sys_slist_append(&ag->tx_pending, &tx->node);
@@ -1075,6 +1076,14 @@ static int bt_hfp_ag_notify_cind_value(struct bt_hfp_ag *ag)
 	uint8_t call_held_count = 0;
 
 	if (ag->ongoing_call_count == 0) {
+		LOG_DBG("CIND value (from indicators): svc=%u call=%u setup=%u held=%u sig=%u roam=%u bat=%u",
+			ag->indicator_value[BT_HFP_AG_SERVICE_IND],
+			ag->indicator_value[BT_HFP_AG_CALL_IND],
+			ag->indicator_value[BT_HFP_AG_CALL_SETUP_IND],
+			ag->indicator_value[BT_HFP_AG_CALL_HELD_IND],
+			ag->indicator_value[BT_HFP_AG_SIGNAL_IND],
+			ag->indicator_value[BT_HFP_AG_ROAM_IND],
+			ag->indicator_value[BT_HFP_AG_BATTERY_IND]);
 		return hfp_ag_send_data(ag, NULL, NULL, "\r\n+CIND:%u,%u,%u,%u,%u,%u,%u\r\n",
 					ag->indicator_value[BT_HFP_AG_SERVICE_IND],
 					ag->indicator_value[BT_HFP_AG_CALL_IND],
@@ -2330,6 +2339,21 @@ static void bt_hfp_ag_call_terminate(struct bt_hfp_ag *ag, void *user_data)
 	}
 }
 
+static void bt_hfp_ag_indicator_only_terminate(struct bt_hfp_ag *ag, void *user_data)
+{
+	/* Clear call indicator for pre-existing calls reported via CIND
+	 * but not tracked in ag->calls[] (e.g., call placed before SLC) */
+	LOG_DBG("indicator_only_terminate: call_ind=%d setup_ind=%d",
+		ag->indicator_value[BT_HFP_AG_CALL_IND],
+		ag->indicator_value[BT_HFP_AG_CALL_SETUP_IND]);
+	if (ag->indicator_value[BT_HFP_AG_CALL_IND] > 0) {
+		hfp_ag_update_indicator(ag, BT_HFP_AG_CALL_IND, 0, NULL, NULL);
+	}
+	if (ag->indicator_value[BT_HFP_AG_CALL_SETUP_IND] > 0) {
+		hfp_ag_update_indicator(ag, BT_HFP_AG_CALL_SETUP_IND, 0, NULL, NULL);
+	}
+}
+
 static int bt_hfp_ag_chup_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 {
 	int err;
@@ -2342,6 +2366,19 @@ static int bt_hfp_ag_chup_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 	}
 
 	call_count = get_none_released_calls(ag);
+	LOG_DBG("CHUP: call_count=%d call_ind=%d setup_ind=%d",
+		call_count,
+		ag->indicator_value[BT_HFP_AG_CALL_IND],
+		ag->indicator_value[BT_HFP_AG_CALL_SETUP_IND]);
+
+	/* No call objects but indicators show active call — handle pre-existing
+	 * call that was set via CIND indicators before SLC completed */
+	if (call_count == 0 &&
+	    (ag->indicator_value[BT_HFP_AG_CALL_IND] > 0 ||
+	     ag->indicator_value[BT_HFP_AG_CALL_SETUP_IND] > 0)) {
+		return hfp_ag_next_step(ag, bt_hfp_ag_indicator_only_terminate,
+					NULL);
+	}
 
 	if (call_count == 1) {
 		bt_hfp_ag_tx_cb_t next_step = NULL;
@@ -3555,7 +3592,7 @@ static void hfp_ag_connected(struct bt_rfcomm_dlc *dlc)
 
 	bt_hfp_ag_set_state(ag, BT_HFP_CONFIG);
 
-	LOG_DBG("AG %p", ag);
+	LOG_INF("AG RFCOMM connected: ag=%p, dlc=%p, waiting for AT+BRSF from HF", ag, dlc);
 }
 
 static void hfp_ag_disconnected(struct bt_rfcomm_dlc *dlc)
@@ -3611,6 +3648,7 @@ static void hfp_ag_recv(struct bt_rfcomm_dlc *dlc, struct net_buf *buf)
 	int err = -ENOEXEC;
 
 	LOG_HEXDUMP_DBG(data, len, "Received:");
+	LOG_INF("AG AT RX: %.*s", len, (const char *)data);
 
 	for (uint32_t index = 0; index < ARRAY_SIZE(cmd_handlers); index++) {
 		if (strlen(cmd_handlers[index].cmd) > len) {
@@ -4042,28 +4080,34 @@ int Z_API(bt_hfp_ag_connect)(struct bt_conn *conn, struct bt_hfp_ag **ag, uint8_
 	struct bt_hfp_ag *new_ag;
 	int err;
 
-	LOG_DBG("");
+	LOG_INF("bt_hfp_ag_connect: conn=%p, channel=%u", conn, channel);
 
 	if (!conn || !ag || !channel) {
+		LOG_ERR("bt_hfp_ag_connect: invalid params (conn=%p, ag=%p, ch=%u)", conn, ag, channel);
 		return -EINVAL;
 	}
 
 	if (!bt_ag) {
+		LOG_ERR("bt_hfp_ag_connect: bt_ag not registered");
 		return -EFAULT;
 	}
 
 	new_ag = hfp_ag_create(conn);
 	if (!new_ag) {
+		LOG_ERR("bt_hfp_ag_connect: hfp_ag_create failed (pool full?)");
 		return -ECONNREFUSED;
 	}
 
+	LOG_INF("bt_hfp_ag_connect: ag=%p, calling bt_rfcomm_dlc_connect(ch=%u)", new_ag, channel);
 	err = bt_rfcomm_dlc_connect(conn, &new_ag->rfcomm_dlc, channel);
 	if (err != 0) {
+		LOG_ERR("bt_hfp_ag_connect: bt_rfcomm_dlc_connect failed: %d", err);
 		(void)memset(new_ag, 0, sizeof(*new_ag));
 		*ag = NULL;
 	} else {
 		*ag = new_ag;
 		bt_hfp_ag_set_state(*ag, BT_HFP_CONNECTING);
+		LOG_INF("bt_hfp_ag_connect: RFCOMM DLC connect initiated OK");
 	}
 
 	return err;
@@ -4599,6 +4643,26 @@ int Z_API(bt_hfp_ag_terminate)(struct bt_hfp_ag_call *call)
 	ag_terminate_call(call);
 
 	return 0;
+}
+
+int Z_API(bt_hfp_ag_clear_call_indicator)(struct bt_hfp_ag *ag)
+{
+	if (ag == NULL) {
+		return -EINVAL;
+	}
+
+	hfp_ag_lock(ag);
+	if (ag->state != BT_HFP_CONNECTED) {
+		hfp_ag_unlock(ag);
+		return -ENOTCONN;
+	}
+	hfp_ag_unlock(ag);
+
+	LOG_DBG("clear_call_indicator: call_ind=%d setup_ind=%d",
+		ag->indicator_value[BT_HFP_AG_CALL_IND],
+		ag->indicator_value[BT_HFP_AG_CALL_SETUP_IND]);
+
+	return hfp_ag_next_step(ag, bt_hfp_ag_indicator_only_terminate, NULL);
 }
 
 int Z_API(bt_hfp_ag_retrieve)(struct bt_hfp_ag_call *call)
