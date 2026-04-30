@@ -196,7 +196,8 @@ void bt_hci_synchronous_conn_complete(struct bt_dev *hdev, struct net_buf *buf)
 	struct bt_conn *sco_conn;
 	uint16_t handle = sys_le16_to_cpu(evt->handle);
 
-	LOG_DBG("status 0x%02x, handle %u, type 0x%02x", evt->status, handle, evt->link_type);
+	LOG_INF("SCO conn complete: status 0x%02x, handle %u, type 0x%02x",
+		evt->status, handle, evt->link_type);
 
 	sco_conn = bt_conn_lookup_addr_sco(hdev, &evt->bdaddr);
 	if (!sco_conn) {

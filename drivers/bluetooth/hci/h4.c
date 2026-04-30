@@ -206,8 +206,10 @@ static struct net_buf *get_rx(struct h4_data *h4, k_timeout_t timeout)
 
 	switch (h4->rx.type) {
 	case BT_HCI_H4_EVT:
+		LOG_INF("get_rx: evt 0x%02x", h4->rx.evt.evt);
 		return bt_buf_get_evt(h4->rx.evt.evt, h4->rx.discardable, timeout);
 	case BT_HCI_H4_ACL:
+		LOG_INF("get_rx: ACL");
 		return bt_buf_get_rx(BT_BUF_ACL_IN, timeout);
 	case BT_HCI_H4_ISO:
 		if (IS_ENABLED(CONFIG_BT_ISO)) {
