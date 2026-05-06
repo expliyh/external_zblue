@@ -2432,8 +2432,16 @@ struct bt_conn *bt_conn_create_br_mc(uint8_t dev_id, const bt_addr_t *peer,
 	(void)memset(cp, 0, sizeof(*cp));
 
 	memcpy(&cp->bdaddr, peer, sizeof(cp->bdaddr));
-	cp->packet_type = sys_cpu_to_le16(0xcc18); /* DM1 DH1 DM3 DH5 DM5 DH5 */
-	cp->pscan_rep_mode = 0x02; /* R2 */
+	cp->packet_type = sys_cpu_to_le16(0xcc18); /* DM1 DH1 DM3 DH3 DM5 DH5 */
+	/* Use R1 instead of R2: R2 assumes the remote page scan mode is known
+	 * (e.g. cached from a prior inquiry result). Without a recent inquiry,
+	 * R2 causes the controller to give up quickly when the peer's page scan
+	 * window is long. R1 (mandatory mode) interoperates with all remotes,
+	 * in particular PTS which reconfigures its page scan parameters between
+	 * test cases. Combined with a larger BT_PAGE_TIMEOUT this makes ACL
+	 * setup reliable across consecutive AG test runs.
+	 */
+	cp->pscan_rep_mode = 0x01; /* R1 */
 	cp->allow_role_switch = param->allow_role_switch ? 0x01 : 0x00;
 	cp->clock_offset = 0x0000; /* TODO used cached clock offset */
 
