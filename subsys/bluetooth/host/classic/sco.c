@@ -332,12 +332,31 @@ static int accept_sco_conn(const bt_addr_t *bdaddr, struct bt_conn *sco_conn)
 
 	cp = net_buf_add(buf, sizeof(*cp));
 	bt_addr_copy(&cp->bdaddr, bdaddr);
-	cp->pkt_type = sys_cpu_to_le16(sco_conn->sco.pkt_type);
+
+	uint16_t voice_setting = sco_conn->sco.chan->voice_setting;
+	uint8_t air_coding = BT_HCI_VOICE_SETTING_AIR_CODING_FMT_GET(voice_setting);
+	bool is_transparent =
+		(air_coding == BT_HCI_VOICE_SETTING_AIR_CODING_FMT_TRANSPARENT);
+
 	cp->tx_bandwidth = sys_cpu_to_le32(0x00001f40);
 	cp->rx_bandwidth = sys_cpu_to_le32(0x00001f40);
-	cp->max_latency = sys_cpu_to_le16(BT_HCI_SCO_MAX_LATENCY_DEFAULT);
-	cp->retrans_effort = BT_HCI_SCO_RETRANS_EFFORT_DEFAULT;
-	cp->content_format = sys_cpu_to_le16(sco_conn->sco.chan->voice_setting);
+	cp->content_format = sys_cpu_to_le16(voice_setting);
+
+	/* Mirror HFP-compliant Setup_Synchronous_Connection parameters on
+	 * the accepting side (HF) so the accepted eSCO link complies with
+	 * HFP 1.7 §6.3 S3 (CVSD) / T2 (mSBC / transparent) defaults.
+	 */
+	if (is_transparent) {
+		cp->max_latency = sys_cpu_to_le16(0x000D);
+		cp->retrans_effort = 0x02;
+	} else {
+		cp->max_latency = sys_cpu_to_le16(0x000A);
+		cp->retrans_effort = 0x01;
+	}
+
+	cp->pkt_type = sys_cpu_to_le16(HCI_PKT_TYPE_ESCO_EV3 |
+				       HCI_PKT_TYPE_ESCO_2EV3 |
+				       HCI_PKT_TYPE_ESCO_3EV3);
 
 	err = bt_hci_cmd_send_sync(sco_conn->hdev, BT_HCI_OP_ACCEPT_SYNC_CONN_REQ, buf, NULL);
 	if (err) {
@@ -412,13 +431,38 @@ static int sco_setup_sync_conn(struct bt_conn *sco_conn)
 
 	LOG_DBG("handle : %x", sco_conn->sco.acl->handle);
 
+	uint16_t voice_setting = sco_conn->sco.chan->voice_setting;
+	uint8_t air_coding = BT_HCI_VOICE_SETTING_AIR_CODING_FMT_GET(voice_setting);
+	bool is_transparent =
+		(air_coding == BT_HCI_VOICE_SETTING_AIR_CODING_FMT_TRANSPARENT);
+
 	cp->handle = sys_cpu_to_le16(sco_conn->sco.acl->handle);
-	cp->pkt_type = sys_cpu_to_le16(sco_conn->sco.pkt_type);
 	cp->tx_bandwidth = sys_cpu_to_le32(0x00001f40);
 	cp->rx_bandwidth = sys_cpu_to_le32(0x00001f40);
-	cp->max_latency = sys_cpu_to_le16(BT_HCI_SCO_MAX_LATENCY_DEFAULT);
-	cp->retrans_effort = BT_HCI_SCO_RETRANS_EFFORT_DEFAULT;
-	cp->content_format = sys_cpu_to_le16(sco_conn->sco.chan->voice_setting);
+	cp->content_format = sys_cpu_to_le16(voice_setting);
+
+	/* HFP 1.7 §6.3 mandates specific Setup_Synchronous_Connection
+	 * parameters per codec so peers can reliably negotiate eSCO:
+	 *   - S3 (CVSD default): max_latency=0x000A (10ms), retrans=power
+	 *   - T2 (mSBC / transparent): max_latency=0x000D (13ms), retrans=quality
+	 * The packet type bitmap allows EV3 / 2-EV3 / 3-EV3 only (no HV1/HV2/HV3
+	 * and no long-EV5 packets). Using codec-specific values (instead of
+	 * 0xFFFF / 0xFF "don't care") significantly improves interoperability
+	 * with strict controllers.
+	 */
+	if (is_transparent) {
+		/* T2 default for mSBC / transparent (wideband speech) */
+		cp->max_latency = sys_cpu_to_le16(0x000D);
+		cp->retrans_effort = 0x02; /* optimize link quality */
+	} else {
+		/* S3 default for CVSD */
+		cp->max_latency = sys_cpu_to_le16(0x000A);
+		cp->retrans_effort = 0x01; /* optimize power */
+	}
+
+	cp->pkt_type = sys_cpu_to_le16(HCI_PKT_TYPE_ESCO_EV3 |
+				       HCI_PKT_TYPE_ESCO_2EV3 |
+				       HCI_PKT_TYPE_ESCO_3EV3);
 
 	err = bt_hci_cmd_send_sync(sco_conn->hdev, BT_HCI_OP_SETUP_SYNC_CONN, buf, NULL);
 	if (err < 0) {
