@@ -208,3 +208,26 @@ struct btp_hfp_ag_battery_update_ev {
 	bt_addr_le_t address;
 	uint8_t level;
 } __packed;
+
+#define BTP_HFP_AG_EV_CALL_CONTROL		0x8e
+struct btp_hfp_ag_call_control_ev {
+	bt_addr_le_t address;
+	uint8_t chld;
+} __packed;
+
+#define BTP_HFP_AG_EV_DTMF			0x8f
+struct btp_hfp_ag_dtmf_ev {
+	bt_addr_le_t address;
+	uint8_t code;
+} __packed;
+
+#define BTP_HFP_AG_EV_NREC			0x90
+struct btp_hfp_ag_nrec_ev {
+	bt_addr_le_t address;
+	uint8_t enable;
+} __packed;
+
+#define BTP_HFP_AG_EV_COPS_REQUEST		0x91
+struct btp_hfp_ag_cops_request_ev {
+	bt_addr_le_t address;
+} __packed;

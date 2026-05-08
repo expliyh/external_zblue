@@ -188,6 +188,19 @@ struct bt_hfp_ag_cb {
 	 */
 	int (*memory_dial)(struct bt_hfp_ag *ag, const char *location, char **number);
 
+	/** HF redial last-number request Callback
+	 *
+	 *  Called when HF issues AT+BLDN. The application is expected to
+	 *  asynchronously query its last-dialed-number store (e.g. telephony
+	 *  service) and respond via bt_hfp_ag_bldn_reply().
+	 *
+	 *  If this callback is not provided or the reply is not called,
+	 *  AT+BLDN is treated as unsupported and ERROR is returned.
+	 *
+	 *  @param ag HFP AG object.
+	 */
+	void (*redial)(struct bt_hfp_ag *ag);
+
 	/** HF phone number calling request Callback
 	 *
 	 *  If this callback is provided it will be called whenever a
@@ -628,6 +641,20 @@ int Z_API(bt_hfp_ag_hold)(struct bt_hfp_ag_call *call);
  *  @return 0 in case of success or negative value in case of error.
  */
 int Z_API(bt_hfp_ag_outgoing)(struct bt_hfp_ag *ag, const char *number);
+
+/** @brief Reply to an AT+BLDN (redial) request
+ *
+ *  Called by the application in response to the redial callback.
+ *  Passing a non-empty number dials that number (equivalent to
+ *  bt_hfp_ag_outgoing). Passing NULL or an empty number rejects the
+ *  redial with +CME ERROR.
+ *
+ *  @param ag HFP AG object.
+ *  @param number Number to dial, or NULL / "" to reject.
+ *
+ *  @return 0 in case of success or negative value in case of error.
+ */
+int Z_API(bt_hfp_ag_bldn_reply)(struct bt_hfp_ag *ag, const char *number);
 
 /** @brief Notify HFP Unit that the remote starts ringing
  *

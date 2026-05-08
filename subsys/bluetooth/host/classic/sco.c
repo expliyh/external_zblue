@@ -334,29 +334,30 @@ static int accept_sco_conn(const bt_addr_t *bdaddr, struct bt_conn *sco_conn)
 	bt_addr_copy(&cp->bdaddr, bdaddr);
 
 	uint16_t voice_setting = sco_conn->sco.chan->voice_setting;
-	uint8_t air_coding = BT_HCI_VOICE_SETTING_AIR_CODING_FMT_GET(voice_setting);
-	bool is_transparent =
-		(air_coding == BT_HCI_VOICE_SETTING_AIR_CODING_FMT_TRANSPARENT);
 
 	cp->tx_bandwidth = sys_cpu_to_le32(0x00001f40);
 	cp->rx_bandwidth = sys_cpu_to_le32(0x00001f40);
 	cp->content_format = sys_cpu_to_le16(voice_setting);
 
-	/* Mirror HFP-compliant Setup_Synchronous_Connection parameters on
-	 * the accepting side (HF) so the accepted eSCO link complies with
-	 * HFP 1.7 §6.3 S3 (CVSD) / T2 (mSBC / transparent) defaults.
+	/* Force all SCO links to go over eSCO (EV3/EV4/EV5) regardless of
+	 * codec. HFP S1/S3/S4 and T1/T2 are all eSCO-based; classic SCO
+	 * (HV1/HV2/HV3) is legacy and some controllers are buggy with it.
+	 *
+	 * Use "don't care" max_latency=0xFFFF / retrans_effort=0xFF so the
+	 * controller can negotiate the best parameters; this is allowed by
+	 * Core Spec Vol 2 Part E §7.1.41 for eSCO.
+	 *
+	 * Packet_Type bitmap semantics per §7.1.41:
+	 *   bits 0-5 = "may be used"   (set => allow)
+	 *   bits 6-9 = "shall not use" (set => disallow EDR variant).
+	 * Include EV3/EV4/EV5 and leave bits 6-9 cleared so the controller
+	 * may also pick EDR variants (2/3-EV3, 2/3-EV5).
 	 */
-	if (is_transparent) {
-		cp->max_latency = sys_cpu_to_le16(0x000D);
-		cp->retrans_effort = 0x02;
-	} else {
-		cp->max_latency = sys_cpu_to_le16(0x000A);
-		cp->retrans_effort = 0x01;
-	}
-
+	cp->max_latency = sys_cpu_to_le16(0xFFFF);
+	cp->retrans_effort = 0xFF;
 	cp->pkt_type = sys_cpu_to_le16(HCI_PKT_TYPE_ESCO_EV3 |
-				       HCI_PKT_TYPE_ESCO_2EV3 |
-				       HCI_PKT_TYPE_ESCO_3EV3);
+				       HCI_PKT_TYPE_ESCO_EV4 |
+				       HCI_PKT_TYPE_ESCO_EV5);
 
 	err = bt_hci_cmd_send_sync(sco_conn->hdev, BT_HCI_OP_ACCEPT_SYNC_CONN_REQ, buf, NULL);
 	if (err) {
@@ -432,37 +433,31 @@ static int sco_setup_sync_conn(struct bt_conn *sco_conn)
 	LOG_DBG("handle : %x", sco_conn->sco.acl->handle);
 
 	uint16_t voice_setting = sco_conn->sco.chan->voice_setting;
-	uint8_t air_coding = BT_HCI_VOICE_SETTING_AIR_CODING_FMT_GET(voice_setting);
-	bool is_transparent =
-		(air_coding == BT_HCI_VOICE_SETTING_AIR_CODING_FMT_TRANSPARENT);
 
 	cp->handle = sys_cpu_to_le16(sco_conn->sco.acl->handle);
 	cp->tx_bandwidth = sys_cpu_to_le32(0x00001f40);
 	cp->rx_bandwidth = sys_cpu_to_le32(0x00001f40);
 	cp->content_format = sys_cpu_to_le16(voice_setting);
 
-	/* HFP 1.7 §6.3 mandates specific Setup_Synchronous_Connection
-	 * parameters per codec so peers can reliably negotiate eSCO:
-	 *   - S3 (CVSD default): max_latency=0x000A (10ms), retrans=power
-	 *   - T2 (mSBC / transparent): max_latency=0x000D (13ms), retrans=quality
-	 * The packet type bitmap allows EV3 / 2-EV3 / 3-EV3 only (no HV1/HV2/HV3
-	 * and no long-EV5 packets). Using codec-specific values (instead of
-	 * 0xFFFF / 0xFF "don't care") significantly improves interoperability
-	 * with strict controllers.
+	/* Force all SCO links to go over eSCO (EV3/EV4/EV5) regardless of
+	 * codec. HFP S1/S3/S4 and T1/T2 are all eSCO-based; classic SCO
+	 * (HV1/HV2/HV3) is legacy and some controllers are buggy with it.
+	 *
+	 * Use "don't care" max_latency=0xFFFF / retrans_effort=0xFF so the
+	 * controller negotiates the best parameters; allowed by Core Spec
+	 * Vol 2 Part E §7.1.41 for eSCO.
+	 *
+	 * Packet_Type bitmap semantics per §7.1.41:
+	 *   bits 0-5 = "may be used"   (set => allow)
+	 *   bits 6-9 = "shall not use" (set => disallow EDR variant).
+	 * Include EV3/EV4/EV5 and leave bits 6-9 cleared so the controller
+	 * may pick EDR variants (2/3-EV3, 2/3-EV5) when available.
 	 */
-	if (is_transparent) {
-		/* T2 default for mSBC / transparent (wideband speech) */
-		cp->max_latency = sys_cpu_to_le16(0x000D);
-		cp->retrans_effort = 0x02; /* optimize link quality */
-	} else {
-		/* S3 default for CVSD */
-		cp->max_latency = sys_cpu_to_le16(0x000A);
-		cp->retrans_effort = 0x01; /* optimize power */
-	}
-
+	cp->max_latency = sys_cpu_to_le16(0xFFFF);
+	cp->retrans_effort = 0xFF;
 	cp->pkt_type = sys_cpu_to_le16(HCI_PKT_TYPE_ESCO_EV3 |
-				       HCI_PKT_TYPE_ESCO_2EV3 |
-				       HCI_PKT_TYPE_ESCO_3EV3);
+				       HCI_PKT_TYPE_ESCO_EV4 |
+				       HCI_PKT_TYPE_ESCO_EV5);
 
 	err = bt_hci_cmd_send_sync(sco_conn->hdev, BT_HCI_OP_SETUP_SYNC_CONN, buf, NULL);
 	if (err < 0) {
@@ -489,11 +484,11 @@ struct bt_conn *bt_conn_create_sco(struct bt_dev *hdev,
 		}
 	}
 
-	if (BT_FEAT_LMP_ESCO_CAPABLE(hdev->features)) {
-		link_type = BT_HCI_ESCO;
-	} else {
-		link_type = BT_HCI_SCO;
-	}
+	/* Force eSCO link type. HFP S1/S3/S4 and T1/T2 all require eSCO;
+	 * classic SCO is only used when the controller doesn't advertise
+	 * LMP eSCO capability, which is unlikely for HFP-capable peers.
+	 */
+	link_type = BT_HCI_ESCO;
 
 	sco_conn = bt_conn_add_sco(hdev, peer, link_type);
 	if (!sco_conn) {

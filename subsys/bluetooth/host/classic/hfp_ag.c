@@ -2997,6 +2997,12 @@ static int bt_hfp_ag_atd_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 	if (is_memory_dial) {
 		if ((bt_ag != NULL) && (bt_ag->memory_dial != NULL)) {
 			err = bt_ag->memory_dial(ag, data, &number);
+			if (err == -EINPROGRESS) {
+				/* Application will reply asynchronously via
+				 * bt_hfp_ag_bldn_reply() / bt_hfp_ag_dial_response().
+				 */
+				return err;
+			}
 			if ((err != 0) || (number == NULL)) {
 				return -ENOTSUP;
 			}
@@ -3024,6 +3030,20 @@ static int bt_hfp_ag_bldn_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 		return -ENOTSUP;
 	}
 
+	/* Delegate the last-number lookup to the application via the redial
+	 * callback so the number can come from a real phonebook / telephony
+	 * service. The application is expected to reply with
+	 * bt_hfp_ag_bldn_reply() asynchronously.
+	 *
+	 * Returning -EINPROGRESS tells the RFCOMM receive loop that the
+	 * final OK/ERROR reply will be sent later (by bldn_reply).
+	 */
+	if (bt_ag && bt_ag->redial) {
+		bt_ag->redial(ag);
+		return -EINPROGRESS;
+	}
+
+	/* Fallback: dial the number cached by a previous outgoing call. */
 	return bt_hfp_ag_outgoing_call(ag, ag->last_number, ag->type);
 }
 
@@ -4768,6 +4788,40 @@ int Z_API(bt_hfp_ag_outgoing)(struct bt_hfp_ag *ag, const char *number)
 	hfp_ag_unlock(ag);
 
 	return bt_hfp_ag_outgoing_call(ag, number, 0);
+}
+
+int Z_API(bt_hfp_ag_bldn_reply)(struct bt_hfp_ag *ag, const char *number)
+{
+	LOG_DBG("");
+
+	if (ag == NULL) {
+		return -EINVAL;
+	}
+
+	hfp_ag_lock(ag);
+	if (ag->state != BT_HFP_CONNECTED) {
+		hfp_ag_unlock(ag);
+		return -ENOTCONN;
+	}
+	hfp_ag_unlock(ag);
+
+	/* AT-level reply only. Outgoing-call state is driven separately by
+	 * the application via bt_hfp_ag_outgoing_call() (i.e. the normal
+	 * phone_state_change(DIALING, number) path), keeping the two
+	 * concerns orthogonal.
+	 */
+	if (!number || !number[0]) {
+		/* No last-dialed number available: CME ERROR 22 ("not found"). */
+		(void)hfp_ag_send_data(ag, NULL, NULL,
+				       "\r\n+CME ERROR:22\r\n");
+	} else {
+		/* Success: OK. The application will drive +CIEV:callsetup=2
+		 * via a follow-up outgoing-call phone_state_change.
+		 */
+		(void)hfp_ag_send_data(ag, NULL, NULL, "\r\nOK\r\n");
+	}
+
+	return 0;
 }
 
 static void bt_hfp_ag_ringing_cb(struct bt_hfp_ag *ag, void *user_data)

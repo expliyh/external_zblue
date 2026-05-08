@@ -969,6 +969,49 @@ void btp_hfp_ag_cind_request_cb(const uint8_t *addr)
 		     &ev, sizeof(ev));
 }
 
+void btp_hfp_ag_call_control_cb(const uint8_t *addr, uint8_t chld)
+{
+	struct btp_hfp_ag_call_control_ev ev;
+
+	LOG_INF("HFP AG call control (CHLD): %u", chld);
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.chld = chld;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_CALL_CONTROL,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_dtmf_cb(const uint8_t *addr, uint8_t code)
+{
+	struct btp_hfp_ag_dtmf_ev ev;
+
+	LOG_INF("HFP AG DTMF: 0x%02x", code);
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.code = code;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_DTMF,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_nrec_cb(const uint8_t *addr, uint8_t enable)
+{
+	struct btp_hfp_ag_nrec_ev ev;
+
+	LOG_INF("HFP AG NREC: %u", enable);
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	ev.enable = enable;
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_NREC,
+		     &ev, sizeof(ev));
+}
+
+void btp_hfp_ag_cops_request_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_cops_request_ev ev;
+
+	LOG_INF("HFP AG COPS request");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_COPS_REQUEST,
+		     &ev, sizeof(ev));
+}
+
 static uint8_t ag_connect_acl(const void *cmd, uint16_t cmd_len,
 			      void *rsp, uint16_t *rsp_len)
 {

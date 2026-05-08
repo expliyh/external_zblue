@@ -4203,32 +4203,53 @@ static int hci_init(struct bt_dev *hdev)
 		return err;
 	}
 
-	/* Write a public BD_ADDR via Zephyr VS command if controller has none.
-	 * Nordic nRF54L15 ships without a public address programmed.
+	/* Write a public BD_ADDR via Zephyr VS command only if the controller
+	 * has no programmed public address. Most USB dongles (CSR, RTL8761,
+	 * Intel, etc.) come with a valid factory address and do NOT implement
+	 * the Zephyr-specific VS_WRITE_BD_ADDR opcode, so sending it would
+	 * block bt_hci_cmd_send_sync for 10s. Only Nordic nRF54L15-style
+	 * naked silicon ships with an all-zero public address and needs this.
 	 */
 	{
-		struct net_buf *buf;
-		struct bt_hci_cp_vs_write_bd_addr *cp;
-		/* Use PTS dongle-friendly address: C0:AA:BB:CC:DD:EE */
-		static const bt_addr_t pub_addr = {{ 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0xC0 }};
+		bt_addr_le_t existing_addr;
 
-		LOG_INF("[pub_addr] Attempting to set public BD_ADDR via VS cmd 0x%04x",
-			BT_HCI_OP_VS_WRITE_BD_ADDR);
-
-		buf = bt_hci_cmd_create(BT_HCI_OP_VS_WRITE_BD_ADDR, sizeof(*cp));
-		if (!buf) {
-			LOG_ERR("[pub_addr] Failed to create VS_WRITE_BD_ADDR cmd buf");
+		if (bt_id_read_public_addr(hdev, &existing_addr)) {
+			LOG_INF("[pub_addr] Controller already has public BD_ADDR; "
+				"skip VS_WRITE_BD_ADDR");
 		} else {
-			cp = net_buf_add(buf, sizeof(*cp));
-			bt_addr_copy(&cp->bdaddr, &pub_addr);
-			LOG_INF("[pub_addr] Sending VS_WRITE_BD_ADDR: %02x:%02x:%02x:%02x:%02x:%02x",
-				pub_addr.val[5], pub_addr.val[4], pub_addr.val[3],
-				pub_addr.val[2], pub_addr.val[1], pub_addr.val[0]);
-			err = bt_hci_cmd_send_sync(hdev, BT_HCI_OP_VS_WRITE_BD_ADDR, buf, NULL);
-			if (err) {
-				LOG_WRN("[pub_addr] VS_WRITE_BD_ADDR failed: err=%d", err);
+			struct net_buf *buf;
+			struct bt_hci_cp_vs_write_bd_addr *cp;
+			/* Use PTS dongle-friendly address: C0:AA:BB:CC:DD:EE */
+			static const bt_addr_t pub_addr = {
+				{ 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0xC0 }
+			};
+
+			LOG_INF("[pub_addr] Attempting to set public BD_ADDR via "
+				"VS cmd 0x%04x", BT_HCI_OP_VS_WRITE_BD_ADDR);
+
+			buf = bt_hci_cmd_create(BT_HCI_OP_VS_WRITE_BD_ADDR,
+						sizeof(*cp));
+			if (!buf) {
+				LOG_ERR("[pub_addr] Failed to create "
+					"VS_WRITE_BD_ADDR cmd buf");
 			} else {
-				LOG_INF("[pub_addr] VS_WRITE_BD_ADDR SUCCESS");
+				cp = net_buf_add(buf, sizeof(*cp));
+				bt_addr_copy(&cp->bdaddr, &pub_addr);
+				LOG_INF("[pub_addr] Sending VS_WRITE_BD_ADDR: "
+					"%02x:%02x:%02x:%02x:%02x:%02x",
+					pub_addr.val[5], pub_addr.val[4],
+					pub_addr.val[3], pub_addr.val[2],
+					pub_addr.val[1], pub_addr.val[0]);
+				err = bt_hci_cmd_send_sync(hdev,
+						BT_HCI_OP_VS_WRITE_BD_ADDR,
+						buf, NULL);
+				if (err) {
+					LOG_WRN("[pub_addr] VS_WRITE_BD_ADDR "
+						"failed: err=%d", err);
+				} else {
+					LOG_INF("[pub_addr] "
+						"VS_WRITE_BD_ADDR SUCCESS");
+				}
 			}
 		}
 	}
