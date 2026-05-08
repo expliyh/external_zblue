@@ -777,6 +777,27 @@ static uint8_t ag_dial_response(const void *cmd, uint16_t cmd_len,
 	return BTP_STATUS_SUCCESS;
 }
 
+extern int z_bt_hfp_ag_redial_response(uint8_t result, const char *number);
+
+static uint8_t ag_redial_response(const void *cmd, uint16_t cmd_len,
+				  void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_redial_response_cmd *cp = cmd;
+	char number[81] = {0};
+	uint16_t len = cp->number_len;
+
+	if (len > 0) {
+		if (len >= sizeof(number))
+			len = sizeof(number) - 1;
+		memcpy(number, cp->number, len);
+		number[len] = '\0';
+	}
+
+	if (z_bt_hfp_ag_redial_response(cp->result, len > 0 ? number : NULL))
+		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
 static uint8_t ag_send_at_cmd(const void *cmd, uint16_t cmd_len,
 			      void *rsp, uint16_t *rsp_len)
 {
@@ -918,6 +939,7 @@ void btp_hfp_ag_dial_cb(const uint8_t *addr, const char *number)
 	uint8_t num_len = 0;
 
 	LOG_INF("HFP AG dial: %s", number ? number : "(redial)");
+
 	memcpy(&ev->address, addr, sizeof(bt_addr_le_t));
 	if (number) {
 		num_len = strlen(number);
@@ -1009,6 +1031,23 @@ void btp_hfp_ag_cops_request_cb(const uint8_t *addr)
 	LOG_INF("HFP AG COPS request");
 	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
 	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_COPS_REQUEST,
+		     &ev, sizeof(ev));
+}
+
+const char *btp_hfp_ag_redial_cb(const uint8_t *addr, char *buf, size_t len)
+{
+	/* Unused: replaced by async btp_hfp_ag_redial_req_cb + redial_response. */
+	(void)addr; (void)buf; (void)len;
+	return NULL;
+}
+
+void btp_hfp_ag_redial_req_cb(const uint8_t *addr)
+{
+	struct btp_hfp_ag_redial_req_ev ev;
+
+	LOG_INF("HFP AG redial request (AT+BLDN)");
+	memcpy(&ev.address, addr, sizeof(bt_addr_le_t));
+	tester_event(BTP_SERVICE_ID_HFP_AG, BTP_HFP_AG_EV_REDIAL_REQ,
 		     &ev, sizeof(ev));
 }
 
@@ -1125,6 +1164,12 @@ static const struct btp_handler ag_handlers[] = {
 		.index = BTP_INDEX,
 		.expect_len = sizeof(struct btp_hfp_ag_connect_acl_cmd),
 		.func = ag_connect_acl,
+	},
+	{
+		.opcode = BTP_HFP_AG_REDIAL_RESPONSE,
+		.index = BTP_INDEX,
+		.expect_len = BTP_HANDLER_LENGTH_VARIABLE,
+		.func = ag_redial_response,
 	},
 };
 

@@ -134,6 +134,13 @@ struct btp_hfp_ag_connect_acl_cmd {
 	bt_addr_le_t address;
 } __packed;
 
+#define BTP_HFP_AG_REDIAL_RESPONSE		0x13
+struct btp_hfp_ag_redial_response_cmd {
+	uint8_t result;
+	uint8_t number_len;
+	uint8_t number[0];
+} __packed;
+
 /* events */
 #define BTP_HFP_AG_EV_CONNECTED		0x80
 struct btp_hfp_ag_connected_ev {
@@ -229,5 +236,10 @@ struct btp_hfp_ag_nrec_ev {
 
 #define BTP_HFP_AG_EV_COPS_REQUEST		0x91
 struct btp_hfp_ag_cops_request_ev {
+	bt_addr_le_t address;
+} __packed;
+
+#define BTP_HFP_AG_EV_REDIAL_REQ		0x92
+struct btp_hfp_ag_redial_req_ev {
 	bt_addr_le_t address;
 } __packed;
