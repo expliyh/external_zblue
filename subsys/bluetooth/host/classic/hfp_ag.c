@@ -2999,7 +2999,7 @@ static int bt_hfp_ag_atd_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 			err = bt_ag->memory_dial(ag, data, &number);
 			if (err == -EINPROGRESS) {
 				/* Application will reply asynchronously via
-				 * bt_hfp_ag_bldn_reply() / bt_hfp_ag_dial_response().
+				 * bt_hfp_ag_dial_at_reply() / bt_hfp_ag_dial_response().
 				 */
 				return err;
 			}
@@ -3033,10 +3033,10 @@ static int bt_hfp_ag_bldn_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 	/* Delegate the last-number lookup to the application via the redial
 	 * callback so the number can come from a real phonebook / telephony
 	 * service. The application is expected to reply with
-	 * bt_hfp_ag_bldn_reply() asynchronously.
+	 * bt_hfp_ag_dial_at_reply() asynchronously.
 	 *
 	 * Returning -EINPROGRESS tells the RFCOMM receive loop that the
-	 * final OK/ERROR reply will be sent later (by bldn_reply).
+	 * final OK/ERROR reply will be sent later (by dial_at_reply).
 	 */
 	if (bt_ag && bt_ag->redial) {
 		bt_ag->redial(ag);
@@ -4790,7 +4790,7 @@ int Z_API(bt_hfp_ag_outgoing)(struct bt_hfp_ag *ag, const char *number)
 	return bt_hfp_ag_outgoing_call(ag, number, 0);
 }
 
-int Z_API(bt_hfp_ag_bldn_reply)(struct bt_hfp_ag *ag, const char *number)
+int Z_API(bt_hfp_ag_dial_at_reply)(struct bt_hfp_ag *ag, const char *number)
 {
 	LOG_DBG("");
 

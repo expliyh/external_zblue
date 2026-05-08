@@ -192,7 +192,7 @@ struct bt_hfp_ag_cb {
 	 *
 	 *  Called when HF issues AT+BLDN. The application is expected to
 	 *  asynchronously query its last-dialed-number store (e.g. telephony
-	 *  service) and respond via bt_hfp_ag_bldn_reply().
+	 *  service) and respond via bt_hfp_ag_dial_at_reply().
 	 *
 	 *  If this callback is not provided or the reply is not called,
 	 *  AT+BLDN is treated as unsupported and ERROR is returned.
@@ -654,7 +654,7 @@ int Z_API(bt_hfp_ag_outgoing)(struct bt_hfp_ag *ag, const char *number);
  *
  *  @return 0 in case of success or negative value in case of error.
  */
-int Z_API(bt_hfp_ag_bldn_reply)(struct bt_hfp_ag *ag, const char *number);
+int Z_API(bt_hfp_ag_dial_at_reply)(struct bt_hfp_ag *ag, const char *number);
 
 /** @brief Notify HFP Unit that the remote starts ringing
  *
