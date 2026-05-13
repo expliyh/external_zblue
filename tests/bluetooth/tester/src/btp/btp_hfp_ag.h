@@ -141,6 +141,11 @@ struct btp_hfp_ag_redial_response_cmd {
 	uint8_t number[0];
 } __packed;
 
+#define BTP_HFP_AG_SET_SUPPRESS_AUTO_SCO	0x14
+struct btp_hfp_ag_set_suppress_auto_sco_cmd {
+	uint8_t suppress;
+} __packed;
+
 /* events */
 #define BTP_HFP_AG_EV_CONNECTED		0x80
 struct btp_hfp_ag_connected_ev {

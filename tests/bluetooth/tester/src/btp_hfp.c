@@ -176,6 +176,7 @@ static uint8_t hfp_dial(const void *cmd, uint16_t cmd_len,
 static uint8_t hfp_set_volume(const void *cmd, uint16_t cmd_len,
 			      void *rsp, uint16_t *rsp_len)
 {
+#if defined(CONFIG_BT_HFP_HF_VOLUME)
 	const struct btp_hfp_set_volume_cmd *cp = cmd;
 	struct bt_conn *conn;
 	int err;
@@ -198,6 +199,10 @@ static uint8_t hfp_set_volume(const void *cmd, uint16_t cmd_len,
 	}
 
 	return BTP_STATUS_SUCCESS;
+#else
+	LOG_WRN("HFP HF volume not supported");
+	return BTP_STATUS_FAILED;
+#endif /* CONFIG_BT_HFP_HF_VOLUME */
 }
 
 static uint8_t hfp_send_dtmf(const void *cmd, uint16_t cmd_len,
@@ -576,6 +581,8 @@ uint8_t tester_unregister_hfp(void)
 
 #include "btp/btp_hfp_ag.h"
 
+extern void bt_hfp_ag_set_suppress_auto_sco(bool suppress);
+
 /* Forward declarations for z_api HFP AG functions */
 extern int z_bt_hfp_ag_init(void);
 extern int z_bt_hfp_connect_acl(const uint8_t *addr);
@@ -626,6 +633,7 @@ static uint8_t ag_supported_commands(const void *cmd, uint16_t cmd_len,
 	tester_set_bit(rp->data, BTP_HFP_AG_SEND_AT_CMD);
 	tester_set_bit(rp->data, BTP_HFP_AG_START_VIRTUAL_CALL);
 	tester_set_bit(rp->data, BTP_HFP_AG_STOP_VIRTUAL_CALL);
+	tester_set_bit(rp->data, BTP_HFP_AG_SET_SUPPRESS_AUTO_SCO);
 
 	*rsp_len = 3;
 	return BTP_STATUS_SUCCESS;
@@ -795,6 +803,15 @@ static uint8_t ag_redial_response(const void *cmd, uint16_t cmd_len,
 
 	if (z_bt_hfp_ag_redial_response(cp->result, len > 0 ? number : NULL))
 		return BTP_STATUS_FAILED;
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t ag_set_suppress_auto_sco(const void *cmd, uint16_t cmd_len,
+					void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_hfp_ag_set_suppress_auto_sco_cmd *cp = cmd;
+
+	bt_hfp_ag_set_suppress_auto_sco(cp->suppress != 0);
 	return BTP_STATUS_SUCCESS;
 }
 
@@ -1170,6 +1187,12 @@ static const struct btp_handler ag_handlers[] = {
 		.index = BTP_INDEX,
 		.expect_len = BTP_HANDLER_LENGTH_VARIABLE,
 		.func = ag_redial_response,
+	},
+	{
+		.opcode = BTP_HFP_AG_SET_SUPPRESS_AUTO_SCO,
+		.index = BTP_INDEX,
+		.expect_len = sizeof(struct btp_hfp_ag_set_suppress_auto_sco_cmd),
+		.func = ag_set_suppress_auto_sco,
 	},
 };
 

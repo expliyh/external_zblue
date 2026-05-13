@@ -973,6 +973,16 @@ struct bt_conn *Z_API(bt_hfp_ag_get_conn)(struct bt_hfp_ag *ag);
  */
 int Z_API(bt_hfp_ag_unregister)(void);
 
+/** @brief Suppress AG auto SCO initiation after call answer.
+ *
+ *  When enabled, AG will not automatically initiate SCO connection after
+ *  a call is answered (ATA). This is used for PTS test cases where the HF
+ *  is expected to initiate the SCO connection (e.g. ACC/BV-09-C).
+ *
+ *  @param suppress true to suppress auto SCO, false to restore default behavior.
+ */
+void bt_hfp_ag_set_suppress_auto_sco(bool suppress);
+
 #ifdef __cplusplus
 }
 #endif

@@ -83,6 +83,11 @@ static struct bt_ag_tx ag_tx[CONFIG_BT_HFP_AG_TX_BUF_COUNT * 2];
 static K_FIFO_DEFINE(ag_tx_free);
 static K_FIFO_DEFINE(ag_tx_notify);
 
+/* When set, AG will not automatically initiate SCO after call answer.
+ * Used for PTS test cases where HF is expected to initiate SCO (e.g. ACC/BV-09-C).
+ */
+static bool ag_suppress_auto_sco;
+
 /* HFP Gateway SDP record */
 static struct bt_sdp_attribute hfp_ag_attrs[] = {
 	BT_SDP_NEW_SERVICE,
@@ -2389,7 +2394,8 @@ static int bt_hfp_ag_chup_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 		}
 
 		call_state = call->call_state;
-		if (call_state == BT_HFP_CALL_ALERTING) {
+		if (call_state == BT_HFP_CALL_ALERTING ||
+		    call_state == BT_HFP_CALL_OUTGOING) {
 			if (!atomic_test_bit(call->flags, BT_HFP_AG_CALL_INCOMING)) {
 				next_step = bt_hfp_ag_call_terminate;
 			} else {
@@ -2582,6 +2588,11 @@ static void bt_hfp_ag_call_setup_none_cb(struct bt_hfp_ag *ag, void *user_data)
 		if (err) {
 			bt_hfp_ag_unit_call_terminate(ag, user_data);
 		}
+		return;
+	}
+
+	if (ag_suppress_auto_sco) {
+		LOG_INF("AG auto SCO suppressed, waiting for HF to initiate");
 		return;
 	}
 
@@ -3305,10 +3316,6 @@ static int bt_hfp_ag_ccwa_handler(struct bt_hfp_ag *ag, struct net_buf *buf)
 {
 	int err;
 	uint32_t value;
-
-	if (!BOTH_SUPT_FEAT(ag, BT_HFP_HF_FEATURE_3WAY_CALL, BT_HFP_AG_FEATURE_3WAY_CALL)) {
-		return -ENOEXEC;
-	}
 
 	if (!is_char(buf, '=')) {
 		return -ENOTSUP;
@@ -5691,4 +5698,10 @@ struct bt_conn *Z_API(bt_hfp_ag_get_conn)(struct bt_hfp_ag *ag)
 	}
 
 	return bt_conn_ref(ag->acl_conn);
+}
+
+void bt_hfp_ag_set_suppress_auto_sco(bool suppress)
+{
+	ag_suppress_auto_sco = suppress;
+	LOG_INF("AG auto SCO suppress: %s", suppress ? "enabled" : "disabled");
 }
